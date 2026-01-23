@@ -1,0 +1,103 @@
+# Emotion Analysis Framework (includes all ML dependencies)
+
+# FastAPI and Server
+fastapi[standard]>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6  # For file uploads
+pydantic[email]
+# Async support
+aiofiles>=23.0.0
+
+# Pydantic for data validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+argon2-cffi
+# MongoDB
+motor>=3.3.0  # Async MongoDB driver
+pymongo>=4.6.0  # Sync MongoDB driver
+dnspython>=2.4.0  # For MongoDB SRV records
+
+# Environment and Configuration
+python-dotenv>=1.0.0
+
+# Authentication and Security
+PyJWT>=2.8.0  # JWT token handling
+passlib[bcrypt]>=1.7.4  # Password hashing
+python-jose[cryptography]>=3.3.0  # JWT utilities
+
+# Redis for OTP management and Celery
+redis>=5.0.1  # Redis client (updated for Celery compatibility)
+
+# Celery for async task processing
+celery[redis]>=5.3.4  # Celery with Redis broker/backend
+kombu>=5.3.4  # Messaging library for Celery
+flower>=2.0.1  # Celery monitoring tool (optional)
+
+# Testing
+pytest>=7.4.0  # Testing framework
+pytest-asyncio>=0.21.0  # Async test support
+httpx>=0.24.0  # HTTP client for testing (used by TestClient)
+
+# Core Framework
+torch==2.2.0
+torchvision>=0.17.0
+numpy>=1.26.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+
+# RFRBoost Dependencies
+pytorch-minimize>=0.0.2
+optuna>=4.5.0
+xgboost>=3.0.0
+
+# Web UI
+streamlit>=1.28.0
+
+# Audio Processing
+librosa>=0.10.0
+opensmile>=2.4.1
+pyAudioAnalysis>=0.3.14
+pydub>=0.25.1
+webrtcvad>=2.0.10
+soundfile>=0.12.1
+
+# Visual Processing
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+face-recognition>=1.3.0
+py-feat>=0.5.0
+pillow>=10.0.0
+scikit-image>=0.21.0
+
+# Text Processing & NLP
+transformers>=4.30.0
+sentence-transformers>=2.2.2
+nltk>=3.8.1
+spacy>=3.6.0
+textblob>=0.17.1
+vaderSentiment>=3.3.2
+openai>=1.0.0
+openai-whisper
+
+# Video Processing
+moviepy>=1.0.3
+ffmpeg-python>=0.2.0
+
+# Data Processing & Visualization
+pandas>=2.0.3
+matplotlib>=3.7.2
+seaborn>=0.12.2
+plotly>=5.15.0
+tqdm>=4.65.0
+
+# Utilities
+PyYAML>=6.0.1
+python-dotenv>=1.0.0
+
+# TTS (EmotiVoice) Dependencies
+numba>=0.56.0
+yacs>=0.1.8
+g2p-en>=2.1.0
+jieba>=0.42.1
+pypinyin>=0.47.0
+pypinyin-dict>=0.1.0

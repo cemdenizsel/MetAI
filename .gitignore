@@ -1,0 +1,9 @@
+emotion_env/*
+
+# API data directory (temporary files)
+api/data/
+__pycache__/
+.idea/
+.env*
+*.sh
+.DS_Store
