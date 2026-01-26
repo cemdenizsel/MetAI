@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+emotion_env/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Data and results (don't include in Docker image)
+data_model/raw/*
+data_model/processed/*
+data_model/results/*
+!data_model/raw/.gitkeep
+!data_model/processed/.gitkeep
+!data_model/results/.gitkeep
+
+# Pretrained ai_models (download separately or mount as volume)
+pretrained/*
+!pretrained/.gitkeep
+
+# Notebooks
+notebooks/
+*.ipynb
+
+# Tests
+tests/
+*_test.py
+test_*.py
+
+# Design files
+design/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Streamlit (not needed for API)
+.streamlit/
+
+# Android source (not needed for API)
+src/main/
+src/androidTest/
+src/test/
+
+# Gradle (not needed for API)
+gradle/
+gradlew
+gradlew.bat
+*.gradle
+*.properties
+

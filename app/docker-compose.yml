@@ -1,0 +1,212 @@
+version: '3.8'
+
+services:
+  emotion-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: emotion-api:latest
+    container_name: emotion-api
+    ports:
+      - "8084:8084"
+    env_file:
+      - .env
+
+    volumes:
+      # Mount data_model directories (optional - for persistent storage)
+      - ./data_model:/code/api/data_model
+      # Mount pretrained models (optional)
+      - ./pretrained:/code/api/pretrained
+      # Mount the entire app directory to ensure all modules are accessible
+      - .:/code/api
+
+    restart: unless-stopped
+
+    environment:
+      - PYTHONPATH=/code/api:$PYTHONPATH
+      - MONGODB_CONNECTION_STRING=mongodb://admin:password@mongodb:27017
+      - MONGODB_DATABASE=emotion_analysis_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    command: bash -c "
+      python -c \"import modules.stage1_input\" && echo 'modules.stage1_input imported successfully' ||
+      echo 'modules.stage1_input not found' &&
+      python -c \"from emotion_framework.processors.video_processor import VideoProcessorWrapper\" && echo 'emotion_framework imported successfully' ||
+      echo 'Import error in emotion_framework' &&
+      cd /code/api && python -c \"import main\" && echo 'Main module imports successfully' ||
+      echo 'Error importing main module' &&
+      cd /code/api && uvicorn main:app --host 0.0.00 --port 8084 --workers 1
+      "
+
+    # Health check - commented out temporarily to prevent restarts during debugging
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -f http://localhost:8084/api/v1/emotion/health || exit 1"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 90s
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+# Redis for Celery and Caching
+  redis:
+    image: redis:7-alpine
+    container_name: emotion-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # MongoDB for data storage
+  mongodb:
+    image: mongo:7-jammy
+    container_name: emotion-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=emotion_analysis_db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  
+  # Celery Worker for Async Tasks
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: emotion-api:latest
+    container_name: emotion-celery-worker
+    command: celery -A celery_app worker --loglevel=info --concurrency=2 --pool=solo
+    depends_on:
+      - redis
+      - mongodb
+    environment:
+      # Redis Configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+
+      # Celery Configuration - now handled in celery_app.py
+      - CELERY_WORKER_HIJACK_ROOT_LOGGER=False
+      - CELERY_WORKER_POOL=prefork
+
+      # MongoDB Configuration
+      - MONGODB_CONNECTION_STRING=mongodb://admin:password@mongodb:27017
+      - MONGODB_DATABASE=emotion_analysis_db
+
+      # OpenAI (for AI analysis)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+
+      # Local LLM (optional)
+      - LOCAL_LLM_BASE_URL=${LOCAL_LLM_BASE_URL:-http://localhost:11434/v1}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-llama3}
+
+      # Task Configuration
+      - CELERY_TASK_TIME_LIMIT=1800
+      - CELERY_WORKER_CONCURRENCY=2
+    volumes:
+      - .:/code/api  # Mount the entire app directory to ensure all modules are accessible
+    restart: unless-stopped
+    working_dir: /code/api  # Set the working directory to the app directory
+
+    # Note: Health check for Celery worker is removed due to exception serialization issues
+    # healthcheck:
+    #   test: ["CMD-SHELL", "celery -A celery_app inspect ping -d celery@$$HOSTNAME 2>/dev/null | grep -q OK || exit 1"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 60s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+          memory: 6G
+        reservations:
+          cpus: '2'
+          memory: 4G
+  
+  # Celery Beat for Scheduled Tasks (Optional)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: emotion-api:latest
+    container_name: emotion-celery-beat
+    command: celery -A celery_app beat --loglevel=info
+    depends_on:
+      - redis
+      - mongodb
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MONGODB_CONNECTION_STRING=mongodb://admin:password@mongodb:27017
+      - MONGODB_DATABASE=emotion_analysis_db
+    volumes:
+      - .:/code/api  # Mount the entire app directory to ensure all modules are accessible
+    working_dir: /code/api  # Set the working directory to the app directory
+    restart: unless-stopped
+
+    # Health check for Celery beat
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -q '[c]elery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  
+  # Flower for Celery Monitoring (Optional)
+  flower:
+    image: mher/flower:2.0
+    container_name: emotion-flower
+    command: celery --broker=redis://redis:6379/1 flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  mongodb_data:
+
