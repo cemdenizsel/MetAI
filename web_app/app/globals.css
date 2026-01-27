@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* Custom theme colors for Tailwind v4 */
+@theme {
+  /* Primary colors */
+  --color-primary: #0D9488;
+  --color-primary-foreground: #FFFFFF;
+
+  /* Secondary colors */
+  --color-secondary: #F3F4F6;
+  --color-secondary-foreground: #1F2937;
+
+  /* Accent colors */
+  --color-accent: #F59E0B;
+  --color-accent-foreground: #1F2937;
+
+  /* Muted colors */
+  --color-muted: #F3F4F6;
+  --color-muted-foreground: #6B7280;
+
+  /* Destructive colors */
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #FFFFFF;
+
+  /* Status colors */
+  --color-success: #10B981;
+  --color-error: #EF4444;
+  --color-warning: #F59E0B;
+  --color-info: #3B82F6;
+
+  /* Ring color */
+  --color-ring: #0D9488;
+}
+
+/* Light Theme (default) */
+:root {
+  --background: #FFFFFF;
+  --foreground: #1F2937;
+  --card: #FFFFFF;
+  --card-foreground: #1F2937;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --input-background: #FFFFFF;
+}
+
+/* Dark Theme */
+.dark {
+  --background: #1E1E1E;
+  --foreground: #E5E5E5;
+  --card: #252526;
+  --card-foreground: #E5E5E5;
+  --popover: #252526;
+  --popover-foreground: #E5E5E5;
+  --border: #3E3E42;
+  --input: #5A5A5A;
+  --input-background: #3C3C3C;
+}
+
+/* Base styles */
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+  background-clip: content-box;
+}
+
+/* Focus styles */
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--color-primary, #0D9488);
+  outline-offset: -1px;
+}
+
+/* Disable user selection on app chrome */
+.select-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}

@@ -1,0 +1,2447 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Emotion Recognition API",
+        "description": "\n    ## Multimodal Emotion Recognition & Knowledge Base API\n    \n    This API provides advanced emotion recognition from video files using multiple\n    state-of-the-art models running in parallel, plus a multimodal knowledge base\n    for document management and intelligent retrieval.\n    \n    ",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/auth/register": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Register new user",
+                "description": "Register a new user with basic package by default. Email must be unique.",
+                "operationId": "register_user_auth_register_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegistrationRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "User login",
+                "description": "Authenticate user and return JWT access token",
+                "operationId": "login_user_auth_login_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile": {
+            "get": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get user profile",
+                "description": "Get current user's profile information",
+                "operationId": "get_user_profile_auth_profile_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/auth/reset-password-request": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Request password reset",
+                "description": "Send OTP code to user's email for password reset",
+                "operationId": "reset_password_request_auth_reset_password_request_post",
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "email",
+                            "title": "Email"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/reset-password-approve": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Approve password reset",
+                "description": "Validate OTP code and reset password",
+                "operationId": "reset_password_approve_auth_reset_password_approve_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PasswordResetRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/change-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Change password",
+                "description": "Change user password (requires authentication)",
+                "operationId": "change_password_auth_change_password_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChangePasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/emotion/health": {
+            "get": {
+                "tags": [
+                    "Emotion Analysis"
+                ],
+                "summary": "Health Check",
+                "description": "Check if the emotion analysis service is running",
+                "operationId": "health_check_api_v1_emotion_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Health Check Api V1 Emotion Health Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/emotion/analyze": {
+            "post": {
+                "tags": [
+                    "Emotion Analysis"
+                ],
+                "summary": "Analyze Video for Emotions",
+                "description": "Upload a video file and get comprehensive emotion analysis",
+                "operationId": "analyze_video_api_v1_emotion_analyze_post",
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_analyze_video_api_v1_emotion_analyze_post"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Video analyzed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MultiModelResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or file"
+                    },
+                    "403": {
+                        "description": "No active subscription"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/emotion/analyze-realtime": {
+            "post": {
+                "tags": [
+                    "Emotion Analysis"
+                ],
+                "summary": "Real-time Emotion Analysis (Future)",
+                "description": "Analyze video chunks for real-time emotion detection",
+                "operationId": "analyze_realtime_api_v1_emotion_analyze_realtime_post",
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_analyze_realtime_api_v1_emotion_analyze_realtime_post"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Analyze Realtime Api V1 Emotion Analyze Realtime Post"
+                                }
+                            }
+                        }
+                    },
+                    "501": {
+                        "description": "Not implemented yet"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/emotion/models": {
+            "get": {
+                "tags": [
+                    "Emotion Analysis"
+                ],
+                "summary": "List Available Models",
+                "description": "Get information about available emotion recognition models",
+                "operationId": "list_models_api_v1_emotion_models_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response List Models Api V1 Emotion Models Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ws/health": {
+            "get": {
+                "tags": [
+                    "WebSocket"
+                ],
+                "summary": "WebSocket Health Check",
+                "description": "Check WebSocket service health",
+                "operationId": "websocket_health_ws_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Websocket Health Ws Health Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ws/sessions/active": {
+            "get": {
+                "tags": [
+                    "WebSocket"
+                ],
+                "summary": "Get Active Sessions",
+                "description": "Get information about active WebSocket sessions",
+                "operationId": "get_active_sessions_ws_sessions_active_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Get Active Sessions Ws Sessions Active Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/submit": {
+            "post": {
+                "tags": [
+                    "Async Jobs"
+                ],
+                "summary": "Submit Video for Async Analysis",
+                "description": "Upload a video file for asynchronous emotion analysis",
+                "operationId": "submit_job_api_v1_jobs_submit_post",
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_submit_job_api_v1_jobs_submit_post"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Job submitted successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Submit Job Api V1 Jobs Submit Post"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or file"
+                    },
+                    "403": {
+                        "description": "No active subscription"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/jobs/{job_id}/status": {
+            "get": {
+                "tags": [
+                    "Async Jobs"
+                ],
+                "summary": "Get Job Status",
+                "description": "Check the status and progress of an async job",
+                "operationId": "get_job_status_api_v1_jobs__job_id__status_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Job Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Job Status Api V1 Jobs  Job Id  Status Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/{job_id}/result": {
+            "get": {
+                "tags": [
+                    "Async Jobs"
+                ],
+                "summary": "Get Job Result",
+                "description": "Retrieve the result of a completed job",
+                "operationId": "get_job_result_api_v1_jobs__job_id__result_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Job Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Job Result Api V1 Jobs  Job Id  Result Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/{job_id}": {
+            "delete": {
+                "tags": [
+                    "Async Jobs"
+                ],
+                "summary": "Cancel Job",
+                "description": "Cancel a running job",
+                "operationId": "cancel_job_api_v1_jobs__job_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Job Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Cancel Job Api V1 Jobs  Job Id  Delete"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/my-jobs": {
+            "get": {
+                "tags": [
+                    "Async Jobs"
+                ],
+                "summary": "List User Jobs",
+                "description": "Get a list of jobs submitted by the current user",
+                "operationId": "list_my_jobs_api_v1_jobs_my_jobs_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1,
+                            "description": "Maximum number of jobs to return",
+                            "default": 20,
+                            "title": "Limit"
+                        },
+                        "description": "Maximum number of jobs to return"
+                    },
+                    {
+                        "name": "skip",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Number of jobs to skip (pagination)",
+                            "default": 0,
+                            "title": "Skip"
+                        },
+                        "description": "Number of jobs to skip (pagination)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response List My Jobs Api V1 Jobs My Jobs Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/health": {
+            "get": {
+                "tags": [
+                    "Async Jobs"
+                ],
+                "summary": "Job Service Health Check",
+                "description": "Check if the job service is operational",
+                "operationId": "job_health_api_v1_jobs_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Job Health Api V1 Jobs Health Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/cache/stats": {
+            "get": {
+                "tags": [
+                    "Cache Management"
+                ],
+                "summary": "Get Cache Statistics",
+                "description": "Get statistics about the result cache",
+                "operationId": "get_cache_stats_api_v1_admin_cache_stats_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Get Cache Stats Api V1 Admin Cache Stats Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/cache/{video_hash}": {
+            "delete": {
+                "tags": [
+                    "Cache Management"
+                ],
+                "summary": "Invalidate Cache Entry",
+                "description": "Remove a specific video's cached result",
+                "operationId": "invalidate_cache_api_v1_admin_cache__video_hash__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "video_hash",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "Video file hash to invalidate",
+                            "title": "Video Hash"
+                        },
+                        "description": "Video file hash to invalidate"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Invalidate Cache Api V1 Admin Cache  Video Hash  Delete"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/cache/flush": {
+            "delete": {
+                "tags": [
+                    "Cache Management"
+                ],
+                "summary": "Flush All Cache",
+                "description": "Clear all cached results (admin only)",
+                "operationId": "flush_cache_api_v1_admin_cache_flush_delete",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Flush Cache Api V1 Admin Cache Flush Delete"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/cache/health": {
+            "get": {
+                "tags": [
+                    "Cache Management"
+                ],
+                "summary": "Cache Health Check",
+                "description": "Check Redis cache health",
+                "operationId": "cache_health_api_v1_admin_cache_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Cache Health Api V1 Admin Cache Health Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/batch/analyze": {
+            "post": {
+                "tags": [
+                    "Batch Processing"
+                ],
+                "summary": "Submit Batch for Analysis",
+                "description": "Upload multiple videos for batch emotion analysis",
+                "operationId": "submit_batch_api_v1_batch_analyze_post",
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_submit_batch_api_v1_batch_analyze_post"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Batch submitted successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Submit Batch Api V1 Batch Analyze Post"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or files"
+                    },
+                    "403": {
+                        "description": "No active subscription or insufficient quota"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/batch/{batch_id}/status": {
+            "get": {
+                "tags": [
+                    "Batch Processing"
+                ],
+                "summary": "Get Batch Status",
+                "description": "Check the status and progress of a batch",
+                "operationId": "get_batch_status_api_v1_batch__batch_id__status_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "batch_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Batch Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Batch Status Api V1 Batch  Batch Id  Status Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/batch/{batch_id}/results": {
+            "get": {
+                "tags": [
+                    "Batch Processing"
+                ],
+                "summary": "Get Batch Results",
+                "description": "Retrieve results of a completed batch",
+                "operationId": "get_batch_results_api_v1_batch__batch_id__results_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "batch_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Batch Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Batch Results Api V1 Batch  Batch Id  Results Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/batch/{batch_id}": {
+            "delete": {
+                "tags": [
+                    "Batch Processing"
+                ],
+                "summary": "Cancel Batch",
+                "description": "Cancel a running batch",
+                "operationId": "cancel_batch_api_v1_batch__batch_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "batch_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Batch Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Cancel Batch Api V1 Batch  Batch Id  Delete"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/batch/my-batches": {
+            "get": {
+                "tags": [
+                    "Batch Processing"
+                ],
+                "summary": "List User Batches",
+                "description": "Get a list of batches submitted by the current user",
+                "operationId": "list_my_batches_api_v1_batch_my_batches_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1,
+                            "description": "Maximum number of batches to return",
+                            "default": 20,
+                            "title": "Limit"
+                        },
+                        "description": "Maximum number of batches to return"
+                    },
+                    {
+                        "name": "skip",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Number of batches to skip (pagination)",
+                            "default": 0,
+                            "title": "Skip"
+                        },
+                        "description": "Number of batches to skip (pagination)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response List My Batches Api V1 Batch My Batches Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/batch/health": {
+            "get": {
+                "tags": [
+                    "Batch Processing"
+                ],
+                "summary": "Batch Service Health Check",
+                "description": "Check if the batch processing service is operational",
+                "operationId": "batch_health_api_v1_batch_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Batch Health Api V1 Batch Health Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/": {
+            "get": {
+                "tags": [
+                    "Root"
+                ],
+                "summary": "API Root",
+                "description": "Get API information",
+                "operationId": "root__get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AIAnalysis": {
+                "properties": {
+                    "summary": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Summary",
+                        "description": "Executive summary of the meeting"
+                    },
+                    "key_insights": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Key Insights",
+                        "description": "Key insights from the analysis"
+                    },
+                    "emotional_dynamics": {
+                        "anyOf": [
+                            {
+                                "additionalProperties": true,
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Emotional Dynamics",
+                        "description": "Analysis of emotional dynamics"
+                    },
+                    "recommendations": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Recommendations",
+                        "description": "Actionable recommendations"
+                    },
+                    "knowledge_base_context": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "additionalProperties": true,
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Knowledge Base Context",
+                        "description": "Retrieved knowledge base context"
+                    },
+                    "detailed_analysis": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Detailed Analysis",
+                        "description": "Detailed analysis text"
+                    },
+                    "raw_llm_response": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Raw Llm Response",
+                        "description": "Raw LLM response for transparency"
+                    },
+                    "llm_model": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Llm Model",
+                        "description": "LLM model used"
+                    },
+                    "agent_available": {
+                        "type": "boolean",
+                        "title": "Agent Available",
+                        "description": "Whether AI agent was available",
+                        "default": false
+                    }
+                },
+                "type": "object",
+                "title": "AIAnalysis",
+                "description": "AI agent meeting analysis."
+            },
+            "Body_analyze_realtime_api_v1_emotion_analyze_realtime_post": {
+                "properties": {
+                    "video_chunk": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "Video Chunk",
+                        "description": "Video chunk (4 seconds)"
+                    },
+                    "session_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Session Id",
+                        "description": "Session ID for continuity"
+                    },
+                    "timestamp": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Timestamp",
+                        "description": "Timestamp in video",
+                        "default": 0.0
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "video_chunk"
+                ],
+                "title": "Body_analyze_realtime_api_v1_emotion_analyze_realtime_post"
+            },
+            "Body_analyze_video_api_v1_emotion_analyze_post": {
+                "properties": {
+                    "video": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "Video",
+                        "description": "Video file to analyze"
+                    },
+                    "fusion_strategy": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Fusion Strategy",
+                        "description": "Fusion strategy (optional)"
+                    },
+                    "run_ai_analysis": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Run Ai Analysis",
+                        "description": "Whether to run AI agent analysis",
+                        "default": true
+                    },
+                    "llm_provider": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Llm Provider",
+                        "description": "LLM provider: 'cloud' or 'local'",
+                        "default": "cloud"
+                    },
+                    "use_cache": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Use Cache",
+                        "description": "Whether to use cache for results",
+                        "default": true
+                    },
+                    "cache_ttl_days": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Cache Ttl Days",
+                        "description": "Cache TTL in days (default: 30)",
+                        "default": 30
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "video"
+                ],
+                "title": "Body_analyze_video_api_v1_emotion_analyze_post"
+            },
+            "Body_submit_batch_api_v1_batch_analyze_post": {
+                "properties": {
+                    "videos": {
+                        "items": {
+                            "type": "string",
+                            "format": "binary"
+                        },
+                        "type": "array",
+                        "title": "Videos",
+                        "description": "List of video files to analyze (max 10)"
+                    },
+                    "fusion_strategy": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Fusion Strategy",
+                        "description": "Fusion strategy (optional)"
+                    },
+                    "run_ai_analysis": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Run Ai Analysis",
+                        "description": "Whether to run AI agent analysis",
+                        "default": true
+                    },
+                    "llm_provider": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Llm Provider",
+                        "description": "LLM provider: 'cloud' or 'local'",
+                        "default": "cloud"
+                    },
+                    "use_cache": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Use Cache",
+                        "description": "Whether to use result caching",
+                        "default": true
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "videos"
+                ],
+                "title": "Body_submit_batch_api_v1_batch_analyze_post"
+            },
+            "Body_submit_job_api_v1_jobs_submit_post": {
+                "properties": {
+                    "video": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "Video",
+                        "description": "Video file to analyze"
+                    },
+                    "fusion_strategy": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Fusion Strategy",
+                        "description": "Fusion strategy (optional)"
+                    },
+                    "run_ai_analysis": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Run Ai Analysis",
+                        "description": "Whether to run AI agent analysis",
+                        "default": true
+                    },
+                    "llm_provider": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Llm Provider",
+                        "description": "LLM provider: 'cloud' or 'local'",
+                        "default": "cloud"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "video"
+                ],
+                "title": "Body_submit_job_api_v1_jobs_submit_post"
+            },
+            "ChangePasswordRequest": {
+                "properties": {
+                    "current_password": {
+                        "type": "string",
+                        "title": "Current Password",
+                        "description": "Current password"
+                    },
+                    "new_password": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 6,
+                        "title": "New Password",
+                        "description": "New password"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "current_password",
+                    "new_password"
+                ],
+                "title": "ChangePasswordRequest"
+            },
+            "EmotionConfidence": {
+                "properties": {
+                    "angry": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Angry",
+                        "description": "Confidence for angry emotion"
+                    },
+                    "disgust": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Disgust",
+                        "description": "Confidence for disgust emotion"
+                    },
+                    "fear": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Fear",
+                        "description": "Confidence for fear emotion"
+                    },
+                    "happy": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Happy",
+                        "description": "Confidence for happy emotion"
+                    },
+                    "sad": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Sad",
+                        "description": "Confidence for sad emotion"
+                    },
+                    "surprise": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Surprise",
+                        "description": "Confidence for surprise emotion"
+                    },
+                    "neutral": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Neutral",
+                        "description": "Confidence for neutral emotion"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "angry",
+                    "disgust",
+                    "fear",
+                    "happy",
+                    "sad",
+                    "surprise",
+                    "neutral"
+                ],
+                "title": "EmotionConfidence",
+                "description": "Confidence scores for each emotion."
+            },
+            "EmotionLLaMaDetails": {
+                "properties": {
+                    "intensity": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Intensity",
+                        "description": "Emotion intensity score"
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "title": "Reasoning",
+                        "description": "Natural language reasoning for prediction"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "intensity",
+                    "reasoning"
+                ],
+                "title": "EmotionLLaMaDetails",
+                "description": "Emotion-LLaMA specific details."
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "MaelfabienPredictions": {
+                "properties": {
+                    "text_cnn_lstm": {
+                        "type": "string",
+                        "title": "Text Cnn Lstm",
+                        "description": "Text CNN-LSTM prediction"
+                    },
+                    "audio_time_cnn": {
+                        "type": "string",
+                        "title": "Audio Time Cnn",
+                        "description": "Audio Time-CNN prediction"
+                    },
+                    "video_xception": {
+                        "type": "string",
+                        "title": "Video Xception",
+                        "description": "Video XCeption prediction"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "text_cnn_lstm",
+                    "audio_time_cnn",
+                    "video_xception"
+                ],
+                "title": "MaelfabienPredictions",
+                "description": "Individual model predictions (for Maelfabien model)."
+            },
+            "MentalHealthAnalysis": {
+                "properties": {
+                    "mental_health_score": {
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0,
+                        "title": "Mental Health Score",
+                        "description": "Mental health score (0-100)"
+                    },
+                    "avg_confidence": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Avg Confidence",
+                        "description": "Average prediction confidence"
+                    },
+                    "num_frames": {
+                        "type": "integer",
+                        "title": "Num Frames",
+                        "description": "Number of frames analyzed"
+                    },
+                    "dominant_emotion": {
+                        "type": "string",
+                        "title": "Dominant Emotion",
+                        "description": "Most frequent emotion"
+                    },
+                    "positive_percentage": {
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0,
+                        "title": "Positive Percentage",
+                        "description": "Percentage of positive emotions"
+                    },
+                    "negative_percentage": {
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0,
+                        "title": "Negative Percentage",
+                        "description": "Percentage of negative emotions"
+                    },
+                    "emotion_distribution": {
+                        "additionalProperties": {
+                            "type": "number"
+                        },
+                        "type": "object",
+                        "title": "Emotion Distribution",
+                        "description": "Distribution of emotions as percentages"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status",
+                        "description": "Mental health status interpretation"
+                    },
+                    "recommendation": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Recommendation",
+                        "description": "Recommendation based on status"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "mental_health_score",
+                    "avg_confidence",
+                    "num_frames",
+                    "dominant_emotion",
+                    "positive_percentage",
+                    "negative_percentage",
+                    "emotion_distribution",
+                    "status"
+                ],
+                "title": "MentalHealthAnalysis",
+                "description": "Mental health analysis based on emotion distribution."
+            },
+            "MessageResponse": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "title": "Success"
+                    },
+                    "message": {
+                        "type": "string",
+                        "title": "Message"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "success",
+                    "message"
+                ],
+                "title": "MessageResponse"
+            },
+            "ModalityFeatures": {
+                "properties": {
+                    "audio_features": {
+                        "type": "integer",
+                        "title": "Audio Features",
+                        "description": "Number of audio features extracted"
+                    },
+                    "visual_features": {
+                        "type": "integer",
+                        "title": "Visual Features",
+                        "description": "Number of visual features extracted"
+                    },
+                    "text_features": {
+                        "type": "integer",
+                        "title": "Text Features",
+                        "description": "Number of text features extracted"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "audio_features",
+                    "visual_features",
+                    "text_features"
+                ],
+                "title": "ModalityFeatures",
+                "description": "Feature counts per modality."
+            },
+            "ModalityWeights": {
+                "properties": {
+                    "audio": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Audio",
+                        "description": "Audio modality weight"
+                    },
+                    "visual": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Visual",
+                        "description": "Visual modality weight"
+                    },
+                    "text": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Text",
+                        "description": "Text modality weight"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "audio",
+                    "visual",
+                    "text"
+                ],
+                "title": "ModalityWeights",
+                "description": "Modality importance weights (for Hybrid model)."
+            },
+            "ModelAgreement": {
+                "properties": {
+                    "rfrboost": {
+                        "type": "string",
+                        "title": "Rfrboost",
+                        "description": "RFRBoost prediction"
+                    },
+                    "attention_deep": {
+                        "type": "string",
+                        "title": "Attention Deep",
+                        "description": "Attention+Deep prediction"
+                    },
+                    "mlp_baseline": {
+                        "type": "string",
+                        "title": "Mlp Baseline",
+                        "description": "MLP Baseline prediction"
+                    },
+                    "agreement_status": {
+                        "type": "string",
+                        "title": "Agreement Status",
+                        "description": "Agreement level (all_agree, majority_agree, disagree)"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "rfrboost",
+                    "attention_deep",
+                    "mlp_baseline",
+                    "agreement_status"
+                ],
+                "title": "ModelAgreement",
+                "description": "Individual model predictions (for Hybrid model)."
+            },
+            "ModelResults": {
+                "properties": {
+                    "model_name": {
+                        "type": "string",
+                        "title": "Model Name",
+                        "description": "Name of the model"
+                    },
+                    "fusion_strategy": {
+                        "type": "string",
+                        "title": "Fusion Strategy",
+                        "description": "Fusion strategy used"
+                    },
+                    "processing_time": {
+                        "type": "number",
+                        "title": "Processing Time",
+                        "description": "Processing time in seconds"
+                    },
+                    "overall_prediction": {
+                        "$ref": "#/components/schemas/OverallPrediction",
+                        "description": "Overall emotion prediction"
+                    },
+                    "temporal_predictions": {
+                        "items": {
+                            "$ref": "#/components/schemas/TemporalPrediction"
+                        },
+                        "type": "array",
+                        "title": "Temporal Predictions",
+                        "description": "Emotion predictions over time"
+                    },
+                    "mental_health_analysis": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/MentalHealthAnalysis"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Mental health analysis"
+                    },
+                    "video_metadata": {
+                        "$ref": "#/components/schemas/VideoMetadata",
+                        "description": "Video metadata"
+                    },
+                    "transcription": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/Transcription"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Video transcription"
+                    },
+                    "features": {
+                        "$ref": "#/components/schemas/ModalityFeatures",
+                        "description": "Extracted feature counts"
+                    },
+                    "modality_weights": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/ModalityWeights"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Modality weights (Hybrid only)"
+                    },
+                    "model_agreement": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/ModelAgreement"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Model agreement (Hybrid only)"
+                    },
+                    "maelfabien_predictions": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/MaelfabienPredictions"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Maelfabien predictions"
+                    },
+                    "emotion_llama_details": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/EmotionLLaMaDetails"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Emotion-LLaMA details"
+                    },
+                    "ai_analysis": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/AIAnalysis"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "AI agent meeting analysis"
+                    },
+                    "frame_paths": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Frame Paths",
+                        "description": "Paths to extracted frames"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "model_name",
+                    "fusion_strategy",
+                    "processing_time",
+                    "overall_prediction",
+                    "temporal_predictions",
+                    "video_metadata",
+                    "features"
+                ],
+                "title": "ModelResults",
+                "description": "Standardized results for a single model."
+            },
+            "MultiModelResponse": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "title": "Success",
+                        "description": "Whether the request was successful"
+                    },
+                    "message": {
+                        "type": "string",
+                        "title": "Message",
+                        "description": "Status message"
+                    },
+                    "results": {
+                        "items": {
+                            "$ref": "#/components/schemas/ModelResults"
+                        },
+                        "type": "array",
+                        "title": "Results",
+                        "description": "Results from all models"
+                    },
+                    "total_processing_time": {
+                        "type": "number",
+                        "title": "Total Processing Time",
+                        "description": "Total processing time in seconds"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "success",
+                    "message",
+                    "results",
+                    "total_processing_time"
+                ],
+                "title": "MultiModelResponse",
+                "description": "Complete response with results from all models.",
+                "example": {
+                    "message": "Successfully analyzed video with all models",
+                    "results": [
+                        {
+                            "fusion_strategy": "RFRBoost + Deep Learning + Attention",
+                            "model_name": "Hybrid (Best)",
+                            "overall_prediction": {
+                                "all_confidences": {
+                                    "angry": 0.02,
+                                    "disgust": 0.01,
+                                    "fear": 0.03,
+                                    "happy": 0.87,
+                                    "neutral": 0.02,
+                                    "sad": 0.02,
+                                    "surprise": 0.03
+                                },
+                                "confidence": 0.87,
+                                "predicted_emotion": "happy"
+                            },
+                            "processing_time": 15.3
+                        }
+                    ],
+                    "success": true,
+                    "total_processing_time": 45.6
+                }
+            },
+            "OverallPrediction": {
+                "properties": {
+                    "predicted_emotion": {
+                        "type": "string",
+                        "title": "Predicted Emotion",
+                        "description": "Overall predicted emotion"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Confidence",
+                        "description": "Prediction confidence"
+                    },
+                    "all_confidences": {
+                        "$ref": "#/components/schemas/EmotionConfidence",
+                        "description": "Confidence scores for all emotions"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "predicted_emotion",
+                    "confidence",
+                    "all_confidences"
+                ],
+                "title": "OverallPrediction",
+                "description": "Overall emotion prediction for the video."
+            },
+            "PasswordResetRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email",
+                        "description": "Email address"
+                    },
+                    "otp_code": {
+                        "type": "string",
+                        "maxLength": 6,
+                        "minLength": 6,
+                        "title": "Otp Code",
+                        "description": "6-digit OTP code"
+                    },
+                    "new_password": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 6,
+                        "title": "New Password",
+                        "description": "New password"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email",
+                    "otp_code",
+                    "new_password"
+                ],
+                "title": "PasswordResetRequest"
+            },
+            "TemporalPrediction": {
+                "properties": {
+                    "timestamp": {
+                        "type": "number",
+                        "title": "Timestamp",
+                        "description": "Time in seconds"
+                    },
+                    "emotion": {
+                        "type": "string",
+                        "title": "Emotion",
+                        "description": "Dominant emotion at this timestamp"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Confidence",
+                        "description": "Confidence of dominant emotion"
+                    },
+                    "all_confidences": {
+                        "$ref": "#/components/schemas/EmotionConfidence",
+                        "description": "Confidence scores for all emotions"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "timestamp",
+                    "emotion",
+                    "confidence",
+                    "all_confidences"
+                ],
+                "title": "TemporalPrediction",
+                "description": "Emotion prediction at a specific timestamp."
+            },
+            "TokenResponse": {
+                "properties": {
+                    "access_token": {
+                        "type": "string",
+                        "title": "Access Token"
+                    },
+                    "token_type": {
+                        "type": "string",
+                        "title": "Token Type",
+                        "default": "bearer"
+                    },
+                    "expires_in": {
+                        "type": "integer",
+                        "title": "Expires In"
+                    },
+                    "user": {
+                        "additionalProperties": true,
+                        "type": "object",
+                        "title": "User"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "access_token",
+                    "expires_in",
+                    "user"
+                ],
+                "title": "TokenResponse"
+            },
+            "Transcription": {
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "title": "Text",
+                        "description": "Full transcription text"
+                    },
+                    "word_count": {
+                        "type": "integer",
+                        "title": "Word Count",
+                        "description": "Number of words in transcription"
+                    },
+                    "language": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Language",
+                        "description": "Detected language",
+                        "default": "en"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "text",
+                    "word_count"
+                ],
+                "title": "Transcription",
+                "description": "Video transcription data."
+            },
+            "UserLoginRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email",
+                        "description": "Email address"
+                    },
+                    "password": {
+                        "type": "string",
+                        "title": "Password",
+                        "description": "Password"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email",
+                    "password"
+                ],
+                "title": "UserLoginRequest"
+            },
+            "UserRegistrationRequest": {
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "minLength": 3,
+                        "title": "Username",
+                        "description": "Username"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email",
+                        "description": "Email address"
+                    },
+                    "password": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 6,
+                        "title": "Password",
+                        "description": "Password"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "username",
+                    "email",
+                    "password"
+                ],
+                "title": "UserRegistrationRequest"
+            },
+            "UserResponse": {
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "title": "Username"
+                    },
+                    "email": {
+                        "type": "string",
+                        "title": "Email"
+                    },
+                    "package": {
+                        "type": "string",
+                        "title": "Package"
+                    },
+                    "created_at": {
+                        "type": "number",
+                        "title": "Created At"
+                    },
+                    "updated_at": {
+                        "type": "number",
+                        "title": "Updated At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "username",
+                    "email",
+                    "package",
+                    "created_at",
+                    "updated_at"
+                ],
+                "title": "UserResponse"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            },
+            "VideoMetadata": {
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "title": "Filename",
+                        "description": "Original filename"
+                    },
+                    "duration": {
+                        "type": "number",
+                        "title": "Duration",
+                        "description": "Duration in seconds"
+                    },
+                    "fps": {
+                        "type": "number",
+                        "title": "Fps",
+                        "description": "Frames per second"
+                    },
+                    "width": {
+                        "type": "integer",
+                        "title": "Width",
+                        "description": "Video width in pixels"
+                    },
+                    "height": {
+                        "type": "integer",
+                        "title": "Height",
+                        "description": "Video height in pixels"
+                    },
+                    "frame_count": {
+                        "type": "integer",
+                        "title": "Frame Count",
+                        "description": "Total number of frames"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "filename",
+                    "duration",
+                    "fps",
+                    "width",
+                    "height",
+                    "frame_count"
+                ],
+                "title": "VideoMetadata",
+                "description": "Video file metadata."
+            }
+        },
+        "securitySchemes": {
+            "HTTPBearer": {
+                "type": "http",
+                "scheme": "bearer"
+            }
+        }
+    }
+}
