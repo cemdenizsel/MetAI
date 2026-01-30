@@ -1,0 +1,41 @@
+<resources>
+    <string name="app_name">Nexem</string>
+
+    <!-- Auth Domain -->
+    <string name="login_page_title">Welcome Back</string>
+    <string name="login_page_subtitle">Sign in to continue your emotion analysis journey</string>
+    <string name="login_page_button_text">Sign In</string>
+    <string name="login_redirection_button_text">Don\'t have an account? Sign Up</string>
+    <string name="login_page_forgot_password_button">Forgot Password?</string>
+    <string name="register_page_title">Create Account</string>
+    <string name="register_page_subtitle">Start your journey to better meetings</string>
+    <string name="register_page_button_text">Register</string>
+    <string name="register_redirection_button_text">Already have an account? Sign In</string>
+    <string name="forgot_password_page_title">Forgot Password ?</string>
+    <string name="forgot_password_page_subtitle">No worries, we\'ll send you reset instructions</string>
+    <string name="forgot_password_page_hint">Enter the email associated with your account</string>
+    <string name="forgot_password_page_reset_link_button_text">Send Reset Link</string>
+    <string name="forgot_password_page_remember_button">Remember your password? Sign in</string>
+    <string name="forgot_password_result_page_title">Check Your Email</string>
+    <string name="forgot_password_result_page_subtitle">We\'ve sent password reset instructions</string>
+    <string name="forgot_password_result_page_success_message">We\'ve sent a password reset link to</string>
+    <string name="forgot_password_result_page_info_message">Please check your email and click the link to reset your password. The link will expire in 1 hour.</string>
+    <string name="forgot_password_result_page_failed_email_info">Didn\'t receive the email?\n• Check your spam or junk folder\n• Make sure your email is correct\n• Wait a few minutes and check again</string>
+    <string name="forgot_password_result_page_secondary_button_text">Resend Email</string>
+    <string name="forgot_password_result_page_primary_button_text">Back to Login</string>
+    <string name="intro_screen_title_state1">Understand Your Emotions</string>
+    <string name="intro_screen_text_state1">Our AI analyzes your facial expressions and voice patterns in real-time to help you understand emotional dynamics during meetings.</string>
+    <string name="intro_screen_title_state2">Improve Communication</string>
+    <string name="intro_screen_text_state2">Get personalized recommendations to enhance your meeting effectiveness and build stronger professional relationships.</string>
+    <string name="intro_screen_title_state3">Privacy First</string>
+    <string name="intro_screen_text_state3">All analysis happens securely. You control when to record and who sees your data. Recordings stay on your device.</string>
+    <string name="intro_screen_skip_button">Skip</string>
+    <string name="intro_screen_next_button">Next</string>
+    <string name="intro_screen_finish_button">Get Started</string>
+    <!--- Fields -->
+    <string name="fullname_field">Full Name</string>
+    <string name="email_field">Email</string>
+    <string name="password">Password</string>
+    <string name="password_reply">Reply Password</string>
+
+</resources>
