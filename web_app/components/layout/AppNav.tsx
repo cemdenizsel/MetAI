@@ -16,6 +16,7 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  Radio,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/components/ui/utils';
@@ -30,6 +31,11 @@ const navItems = [
     label: 'New Analysis',
     href: '/upload',
     icon: Upload,
+  },
+  {
+    label: 'Real-Time',
+    href: '/realtime',
+    icon: Radio,
   },
   {
     label: 'History',

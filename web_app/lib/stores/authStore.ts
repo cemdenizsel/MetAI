@@ -2,6 +2,19 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, AuthState } from '@/types/auth';
 import * as authApi from '@/lib/api/auth';
+import { setCookie, deleteCookie } from 'cookies-next';
+
+// Helper to set auth token in both localStorage and cookie
+const setAuthToken = (token: string) => {
+  localStorage.setItem('auth_token', token);
+  setCookie('auth_token', token, { maxAge: 60 * 60 * 24 * 7 }); // 7 days
+};
+
+// Helper to remove auth token from both localStorage and cookie
+const removeAuthToken = () => {
+  localStorage.removeItem('auth_token');
+  deleteCookie('auth_token');
+};
 
 interface AuthActions {
   login: (email: string, password: string) => Promise<void>;
@@ -29,7 +42,7 @@ export const useAuthStore = create<AuthStore>()(
           const response = await authApi.login({ email, password });
           const token = response.access_token;
 
-          localStorage.setItem('auth_token', token);
+          setAuthToken(token);
 
           const profile = await authApi.getProfile();
           const user: User = {
@@ -59,7 +72,7 @@ export const useAuthStore = create<AuthStore>()(
           const response = await authApi.register({ username, email, password });
           const token = response.access_token;
 
-          localStorage.setItem('auth_token', token);
+          setAuthToken(token);
 
           const profile = await authApi.getProfile();
           const user: User = {
@@ -85,6 +98,8 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: () => {
         authApi.logout();
+        removeAuthToken();
+        localStorage.removeItem('user');
         set({
           user: null,
           token: null,
@@ -102,6 +117,9 @@ export const useAuthStore = create<AuthStore>()(
           return;
         }
 
+        // Ensure cookie is synced with localStorage
+        setCookie('auth_token', token, { maxAge: 60 * 60 * 24 * 7 });
+
         try {
           const profile = await authApi.getProfile();
           const user: User = {
@@ -118,7 +136,7 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false,
           });
         } catch {
-          localStorage.removeItem('auth_token');
+          removeAuthToken();
           localStorage.removeItem('user');
           set({
             user: null,

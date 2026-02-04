@@ -41,10 +41,13 @@ export default function HistoryPage() {
     setLoading(true);
     try {
       const data = await emotionApi.getMyJobs(ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-      setJobs(data);
-      setHasMore(data.length === ITEMS_PER_PAGE);
+      // Ensure data is always an array
+      const jobsArray = Array.isArray(data) ? data : [];
+      setJobs(jobsArray);
+      setHasMore(jobsArray.length === ITEMS_PER_PAGE);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load history');
+      setJobs([]); // Reset to empty array on error
     } finally {
       setLoading(false);
     }
@@ -55,7 +58,7 @@ export default function HistoryPage() {
 
     try {
       await emotionApi.deleteJob(jobId);
-      setJobs(jobs.filter((j) => j.id !== jobId));
+      setJobs((prevJobs) => (Array.isArray(prevJobs) ? prevJobs : []).filter((j) => j.id !== jobId));
       if (selectedJob?.id === jobId) {
         setSelectedJob(null);
       }
@@ -87,11 +90,11 @@ export default function HistoryPage() {
     return colors[status] || colors.pending;
   };
 
-  const filteredJobs = jobs.filter((job) => {
+  const filteredJobs = (Array.isArray(jobs) ? jobs : []).filter((job) => {
     const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
     const matchesSearch =
       !searchQuery ||
-      job.filename.toLowerCase().includes(searchQuery.toLowerCase());
+      job.filename?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
