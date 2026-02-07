@@ -1,15 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Radio, AlertCircle, Info, Wifi, WifiOff } from 'lucide-react';
+import { Radio, AlertCircle, Info, Wifi, WifiOff, Send, MessageSquare, FileText } from 'lucide-react';
 import { WebcamCapture } from '@/components/emotion/WebcamCapture';
 import { RealtimeEmotionDisplay } from '@/components/emotion/RealtimeEmotionDisplay';
 import { useRealtimeAnalysis } from '@/lib/hooks/useRealtimeAnalysis';
 import { useAuthStore } from '@/lib/stores/authStore';
+import * as meetingApi from '@/lib/api/meeting';
+import type { AskCitation } from '@/types/meeting';
+
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  source?: 'rag' | 'openai';
+  citations?: AskCitation[];
+};
 
 export default function RealtimePage() {
   const { token } = useAuthStore();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [pendingStart, setPendingStart] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const {
     isConnected,
@@ -38,32 +52,42 @@ export default function RealtimePage() {
     [isConnected, sendChunk]
   );
 
-  // Start analysis
+  // Start analysis: connect first; recording starts when isConnected (see effect below)
   const handleStartAnalysis = useCallback(() => {
-    // Try to get token from store first, then fallback to localStorage
     const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null);
-    
     if (!authToken) {
       console.error('No auth token available');
       alert('Not authenticated. Please log out and log in again.');
       return;
     }
-
-    console.log('Starting analysis with token:', authToken.substring(0, 20) + '...');
-    setIsAnalyzing(true);
+    setPendingStart(true);
     connect(authToken);
   }, [token, connect]);
 
   // Stop analysis
   const handleStopAnalysis = useCallback(() => {
+    setPendingStart(false);
     setIsAnalyzing(false);
     complete();
-    
-    // Give time for the complete message to process, then disconnect
     setTimeout(() => {
       disconnect();
     }, 1000);
   }, [complete, disconnect]);
+
+  // Start recording only after WebSocket is connected
+  useEffect(() => {
+    if (isConnected && pendingStart) {
+      setIsAnalyzing(true);
+      setPendingStart(false);
+    }
+  }, [isConnected, pendingStart]);
+
+  // Clear pending if connection fails or closes before we started recording
+  useEffect(() => {
+    if (error || (!isConnecting && !isConnected && pendingStart)) {
+      setPendingStart(false);
+    }
+  }, [error, isConnecting, isConnected, pendingStart]);
 
   // Reset on unmount
   useEffect(() => {
@@ -74,6 +98,30 @@ export default function RealtimePage() {
       reset();
     };
   }, []);
+
+  const handleChatSend = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const text = chatInput.trim();
+      if (!text || chatLoading) return;
+      setChatInput('');
+      setChatMessages((prev) => [...prev, { role: 'user', content: text }]);
+      setChatLoading(true);
+      setChatError(null);
+      try {
+        const res = await meetingApi.ask(text);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: res.answer, source: res.source, citations: res.citations },
+        ]);
+      } catch (err) {
+        setChatError(err instanceof Error ? err.message : 'Failed to get answer');
+      } finally {
+        setChatLoading(false);
+      }
+    },
+    [chatInput, chatLoading]
+  );
 
   return (
     <div className="space-y-6">
@@ -162,7 +210,12 @@ export default function RealtimePage() {
             />
           </div>
 
-          {/* Session Info */}
+          {/* Session Info / Connecting */}
+          {pendingStart && isConnecting && (
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Connecting…</p>
+            </div>
+          )}
           {sessionId && (
             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -181,6 +234,109 @@ export default function RealtimePage() {
             isAnalyzing={isAnalyzing && isConnected}
             chunksSent={chunksSent}
           />
+        </div>
+      </div>
+
+      {/* Chat panel: ask questions (RAG-first, then OpenAI) */}
+      <div className="p-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-teal-500" />
+          Meeting chat
+        </h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Ask questions during your meeting. Answers come from your Documents first; if not found, we use general AI.
+        </p>
+        <div className="flex flex-col gap-4">
+          <div className="min-h-[200px] max-h-[320px] overflow-y-auto space-y-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+            {chatMessages.length === 0 && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                Type a question and press Send to get answers from your documents or AI.
+              </p>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-lg px-4 py-2 ${
+                    msg.role === 'user'
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white'
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  {msg.role === 'assistant' && msg.source && (
+                    <>
+                      <span
+                        className={`inline-flex items-center gap-1 mt-2 text-xs ${
+                          msg.source === 'rag'
+                            ? 'text-teal-600 dark:text-teal-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        {msg.source === 'rag' ? (
+                          <>
+                            <FileText className="w-3 h-3" />
+                            From your documents
+                          </>
+                        ) : (
+                          'General answer'
+                        )}
+                      </span>
+                      {msg.source === 'rag' && msg.citations && msg.citations.length > 0 && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer text-teal-600 dark:text-teal-400 hover:underline">
+                            Sources ({msg.citations.length})
+                          </summary>
+                          <ul className="mt-1 space-y-1 pl-2 border-l-2 border-teal-200 dark:border-teal-700">
+                            {msg.citations.map((c, j) => (
+                              <li key={j} className="text-gray-600 dark:text-gray-300">
+                                {c.document_id && <span className="font-medium">{c.document_id}</span>}
+                                {c.page_number != null && ` · p.${c.page_number}`}
+                                {c.content_snippet && (
+                                  <p className="mt-0.5 text-gray-500 dark:text-gray-400 line-clamp-2">
+                                    {c.content_snippet}
+                                  </p>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <span className="inline-block w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                Getting answer...
+              </div>
+            )}
+          </div>
+          {chatError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{chatError}</p>
+          )}
+          <form onSubmit={handleChatSend} className="flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Ask a question..."
+              disabled={chatLoading}
+              className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || chatLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              Send
+            </button>
+          </form>
         </div>
       </div>
 

@@ -29,6 +29,7 @@ export function WebcamCapture({
   disabled = false,
 }: WebcamCaptureProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [hasAudio, setHasAudio] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
@@ -52,23 +53,45 @@ export function WebcamCapture({
     setError(null);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user',
-        },
-        audio: false,
-      });
+      // Request both video and audio so real-time analysis can use your voice
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user',
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (audioErr) {
+        // If microphone is denied, fall back to video-only (face analysis only)
+        if (audioErr instanceof DOMException && (audioErr.name === 'NotAllowedError' || audioErr.name === 'NotFoundError')) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user',
+            },
+            audio: false,
+          });
+        } else {
+          throw audioErr;
+        }
+      }
 
       streamRef.current = stream;
-      
+      setHasAudio(stream.getAudioTracks().length > 0);
+
       // Attach stream to video element immediately since it's always rendered
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
-      
+
       setHasPermission(true);
       setIsCameraOn(true);
     } catch (err) {
@@ -118,6 +141,7 @@ export function WebcamCapture({
     }
 
     setIsCameraOn(false);
+    setHasAudio(null);
   }, []);
 
   const startRecording = useCallback(() => {
@@ -184,9 +208,7 @@ export function WebcamCapture({
 
     // Continue recording chunks
     recordingIntervalRef.current = setInterval(recordChunk, CHUNK_DURATION_MS);
-
-    onStartAnalysis();
-  }, [isCameraOn, onChunkReady, onStartAnalysis]);
+  }, [isCameraOn, onChunkReady]);
 
   const stopRecording = useCallback(() => {
     // Stop current recording
@@ -203,13 +225,29 @@ export function WebcamCapture({
     onStopAnalysis();
   }, [onStopAnalysis]);
 
+  // Start recording when parent sets isAnalyzing (after WebSocket is connected)
+  useEffect(() => {
+    if (!isAnalyzing || !isCameraOn || !streamRef.current) return;
+    startRecording();
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      mediaRecorderRef.current = null;
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    };
+  }, [isAnalyzing, isCameraOn, startRecording]);
+
   const handleStartStop = useCallback(() => {
     if (isAnalyzing) {
       stopRecording();
     } else {
-      startRecording();
+      onStartAnalysis();
     }
-  }, [isAnalyzing, startRecording, stopRecording]);
+  }, [isAnalyzing, onStartAnalysis, stopRecording]);
 
   // Initial permission check
   useEffect(() => {
@@ -357,6 +395,13 @@ export function WebcamCapture({
       {hasPermission === false && !error && (
         <p className="text-center text-sm text-amber-500">
           Camera access was denied. Please enable it in your browser settings.
+        </p>
+      )}
+
+      {/* Mic hint when camera is on but mic was blocked */}
+      {hasPermission === true && hasAudio === false && isCameraOn && (
+        <p className="text-center text-sm text-amber-500">
+          Microphone not in use (blocked or denied). To analyze your voice, allow the microphone for this site in your browser settings, then turn off the camera and enable it again.
         </p>
       )}
     </div>

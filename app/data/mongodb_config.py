@@ -67,14 +67,14 @@ class MongoDBConfig:
     async def _create_indexes(self):
         """Create necessary indexes for optimal performance."""
         try:
-            # Chat sessions indexes
-            if self.chat_sessions_collection:
+            # Chat sessions indexes (use "is not None" — PyMongo Collection has no bool())
+            if self.chat_sessions_collection is not None:
                 await self.chat_sessions_collection.create_index("chat_id", unique=True)
                 await self.chat_sessions_collection.create_index("created_at")
                 await self.chat_sessions_collection.create_index("updated_at")
             
             # Users indexes
-            if self.users_collection_instance:
+            if self.users_collection_instance is not None:
                 await self.users_collection_instance.create_index("email", unique=True)
                 await self.users_collection_instance.create_index("username", unique=True)
                 await self.users_collection_instance.create_index("created_at")

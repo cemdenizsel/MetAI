@@ -20,7 +20,8 @@ interface AuthActions {
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  loadUser: () => Promise<void>;
+  /** Returns true if authenticated, false otherwise. Use to redirect immediately. */
+  loadUser: () => Promise<boolean>;
   setLoading: (isLoading: boolean) => void;
 }
 
@@ -108,13 +109,14 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      loadUser: async () => {
+      loadUser: async (): Promise<boolean> => {
         const token = localStorage.getItem('auth_token');
         const userStr = localStorage.getItem('user');
 
         if (!token || !userStr) {
+          removeAuthToken();
           set({ isLoading: false, isAuthenticated: false });
-          return;
+          return false;
         }
 
         // Ensure cookie is synced with localStorage
@@ -135,6 +137,7 @@ export const useAuthStore = create<AuthStore>()(
             isAuthenticated: true,
             isLoading: false,
           });
+          return true;
         } catch {
           removeAuthToken();
           localStorage.removeItem('user');
@@ -144,6 +147,7 @@ export const useAuthStore = create<AuthStore>()(
             isAuthenticated: false,
             isLoading: false,
           });
+          return false;
         }
       },
     }),

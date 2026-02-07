@@ -39,6 +39,7 @@ class RealtimeVideoProcessor:
         self.frame_size = (224, 224)
         self._feature_extractor = None
         self._fusion_engine = None
+        self._fer_analyzer = None
         
         logger.info("RealtimeVideoProcessor initialized")
     
@@ -61,6 +62,12 @@ class RealtimeVideoProcessor:
                 return self._get_default_prediction()
             
             features = self._extract_features_fast(frames, chunk_path)
+            audio_features = features.get('audio') or []
+            # When there is no audio (e.g. webcam), use FER on frames so emotion varies by expression
+            if len(audio_features) == 0 and len(frames) > 0:
+                prediction = self._predict_emotion_from_visual(frames)
+                if prediction is not None:
+                    return prediction
             prediction = self._predict_emotion_fast(features)
             
             return prediction
@@ -68,6 +75,33 @@ class RealtimeVideoProcessor:
         except Exception as e:
             logger.error(f"Error processing chunk: {e}", exc_info=True)
             return self._get_default_prediction()
+    
+    def _predict_emotion_from_visual(self, frames: List[np.ndarray]) -> Optional[Dict[str, Any]]:
+        """
+        Predict emotion from frames using FER when audio is empty (e.g. webcam).
+        Returns None if FER is unavailable or fails.
+        """
+        try:
+            if self._fer_analyzer is None:
+                from emotion_framework.analyzers.fer_analyzer import FERAnalyzer
+                self._fer_analyzer = FERAnalyzer(model_type='custom_cnn')
+            # Use middle frame for stability
+            frame = frames[len(frames) // 2]
+            if frame is None or frame.size == 0:
+                return None
+            # FER expects RGB; OpenCV frames are BGR
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            result = self._fer_analyzer.predict_emotion(frame_rgb)
+            if not result or result.get('confidence', 0) == 0:
+                return None
+            return {
+                'emotion': result.get('emotion', 'neutral'),
+                'confidence': result.get('confidence', 0.0),
+                'confidences': result.get('all_confidences', result.get('confidences', {})),
+            }
+        except Exception as e:
+            logger.debug("FER visual prediction skipped: %s", e)
+            return None
     
     def _extract_frames_fast(self, video_path: str) -> List[np.ndarray]:
         """
@@ -276,7 +310,8 @@ class RealtimeFeatureExtractor:
             return audio_features
             
         except Exception as e:
-            logger.error(f"Error extracting audio features: {e}")
+            # Realtime webcam chunks often have no audio or unsupported codec; we fall back to FER.
+            logger.debug("Audio extraction skipped (%s): %s", type(e).__name__, repr(e), exc_info=True)
             return np.array([])
 
 

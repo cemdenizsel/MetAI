@@ -38,6 +38,11 @@ except Exception as e:
     OPENAI_AVAILABLE = False
     logging.error(f"✗ Unexpected error importing OpenAI: {e}")
 
+try:
+    from utils.opik_helper import wrap_openai_for_opik
+except ImportError:
+    wrap_openai_for_opik = lambda c, **kw: c  # noqa: E731
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +99,7 @@ class MeetingAnalysisAgent:
                     api_key=self.api_key,
                     base_url=self.base_url
                 )
+                self.client = wrap_openai_for_opik(self.client, project_name="metai-emotion")
                 logger.info(f"✓ AI Agent client initialized with {self.provider} provider using {self.model}")
             except Exception as e:
                 logger.error(f"✗ Failed to initialize OpenAI client: {e}")
@@ -134,7 +140,7 @@ class MeetingAnalysisAgent:
         }
         
         # Get knowledge base context if available
-        dominant_emotion = emotion_results.get('overall_prediction', {}).get('predicted_emotion', None)
+        dominant_emotion = self._get_from_obj(emotion_results.get('overall_prediction'), 'predicted_emotion', None)
         if self.query_engine and context_query:
             kb_context = self._retrieve_knowledge_context(
                 query=context_query,
@@ -312,28 +318,41 @@ to provide actionable insights. Your analysis should be professional, empathetic
         
         return parsed_result
     
+    def _get_meta(self, video_metadata: Any, key: str, default: Any = None) -> Any:
+        """Get a value from video_metadata whether it is a dict or an object."""
+        if isinstance(video_metadata, dict):
+            return video_metadata.get(key, default)
+        return getattr(video_metadata, key, default)
+
+    def _get_from_obj(self, obj: Any, key: str, default: Any = None) -> Any:
+        """Get a value from obj whether it is a dict or a dataclass (e.g. EmotionPrediction, MentalHealthAnalysis)."""
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
     def _build_analysis_prompt(
         self,
         emotion_results: Dict[str, Any],
-        video_metadata: Dict[str, Any],
+        video_metadata: Any,
         transcription: Optional[str],
         kb_context: List[Dict[str, Any]]
     ) -> str:
         """Build the analysis prompt for the LLM."""
-        
         prompt_parts = [
             "# Meeting Video Analysis Request\n",
-            f"## Video Information",
-            f"- Filename: {video_metadata.get('filename', 'Unknown')}",
-            f"- Duration: {video_metadata.get('duration', 0):.1f} seconds",
-            f"- Date: {video_metadata.get('upload_date', 'Unknown')}\n"
+            "## Video Information",
+            f"- Filename: {self._get_meta(video_metadata, 'filename') or 'Unknown'}",
+            f"- Duration: {float(self._get_meta(video_metadata, 'duration', 0)):.1f} seconds",
+            f"- Date: {self._get_meta(video_metadata, 'upload_date') or 'Unknown'}\n"
         ]
         
         # Add emotion analysis
         if 'overall_prediction' in emotion_results and emotion_results['overall_prediction']:
             pred = emotion_results['overall_prediction']
-            emotion = pred.get('predicted_emotion', 'neutral')
-            confidence = pred.get('confidence', 0.0)
+            emotion = self._get_from_obj(pred, 'predicted_emotion', 'neutral')
+            confidence = self._get_from_obj(pred, 'confidence', 0.0)
             
             prompt_parts.extend([
                 "## Emotional Analysis",
@@ -342,7 +361,7 @@ to provide actionable insights. Your analysis should be professional, empathetic
             ])
             
             # Add emotion distribution
-            all_confs = pred.get('all_confidences', pred.get('probabilities', {}))
+            all_confs = self._get_from_obj(pred, 'all_confidences', self._get_from_obj(pred, 'probabilities', {}))
             if all_confs:
                 prompt_parts.append("- Emotion Distribution:")
                 for emotion_name, conf in all_confs.items():
@@ -356,9 +375,9 @@ to provide actionable insights. Your analysis should be professional, empathetic
                 "Key moments during the meeting:"
             ])
             for i, temp in enumerate(emotion_results['temporal_predictions'][:10], 1):
-                timestamp = temp.get('timestamp', 0)
-                emotion = temp.get('emotion', temp.get('predicted_emotion', 'neutral'))
-                confidence = temp.get('confidence', 0.0)
+                timestamp = self._get_from_obj(temp, 'timestamp', 0)
+                emotion = self._get_from_obj(temp, 'emotion', self._get_from_obj(temp, 'predicted_emotion', 'neutral'))
+                confidence = self._get_from_obj(temp, 'confidence', 0.0)
                 prompt_parts.append(
                     f"{i}. At {timestamp:.0f}s: {emotion.title()} ({confidence:.0%})"
                 )
@@ -369,11 +388,11 @@ to provide actionable insights. Your analysis should be professional, empathetic
             mh = emotion_results['mental_health_analysis']
             prompt_parts.extend([
                 "## Participant Well-being Indicators",
-                f"- Overall Score: {mh.get('mental_health_score', 0):.1f}/100",
-                f"- Status: {mh.get('status', 'Unknown')}",
-                f"- Dominant Emotion: {mh.get('dominant_emotion', 'neutral').title()}",
-                f"- Positive Emotions: {mh.get('positive_percentage', 0):.1f}%",
-                f"- Negative Emotions: {mh.get('negative_percentage', 0):.1f}%\n"
+                f"- Overall Score: {self._get_from_obj(mh, 'mental_health_score', 0):.1f}/100",
+                f"- Status: {self._get_from_obj(mh, 'status', 'Unknown')}",
+                f"- Dominant Emotion: {self._get_from_obj(mh, 'dominant_emotion', 'neutral').title()}",
+                f"- Positive Emotions: {self._get_from_obj(mh, 'positive_percentage', 0):.1f}%",
+                f"- Negative Emotions: {self._get_from_obj(mh, 'negative_percentage', 0):.1f}%\n"
             ])
         
         # Add transcription
@@ -507,12 +526,12 @@ to provide actionable insights. Your analysis should be professional, empathetic
         # Extract dominant emotion
         if 'overall_prediction' in emotion_results and emotion_results['overall_prediction']:
             pred = emotion_results['overall_prediction']
-            emotion = pred.get('predicted_emotion', 'neutral')
-            confidence = pred.get('confidence', 0.0)
+            emotion = self._get_from_obj(pred, 'predicted_emotion', 'neutral')
+            confidence = self._get_from_obj(pred, 'confidence', 0.0)
             
             analysis["summary"] = (
                 f"The meeting shows predominantly {emotion} emotion with {confidence:.0%} confidence. "
-                f"Duration: {video_metadata.get('duration', 0):.0f} seconds."
+                f"Duration: {float(self._get_meta(video_metadata, 'duration', 0)):.0f} seconds."
             )
             
             # Generate insights based on emotion
@@ -529,7 +548,7 @@ to provide actionable insights. Your analysis should be professional, empathetic
         # Mental health insights
         if 'mental_health_analysis' in emotion_results and emotion_results['mental_health_analysis']:
             mh = emotion_results['mental_health_analysis']
-            score = mh.get('mental_health_score', 50)
+            score = self._get_from_obj(mh, 'mental_health_score', 50)
             
             if score >= 70:
                 analysis["key_insights"].append("Positive well-being indicators")
@@ -538,7 +557,7 @@ to provide actionable insights. Your analysis should be professional, empathetic
                 analysis["recommendations"].append("Consider wellness check-ins with team members")
             
             analysis["emotional_dynamics"]["well_being_score"] = f"{score:.0f}/100"
-            analysis["emotional_dynamics"]["status"] = mh.get('status', 'Unknown')
+            analysis["emotional_dynamics"]["status"] = self._get_from_obj(mh, 'status', 'Unknown')
         
         # Temporal analysis
         if 'temporal_predictions' in emotion_results:

@@ -7,6 +7,7 @@ Service for managing async emotion analysis jobs.
 import os
 import logging
 import tempfile
+import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from fastapi import UploadFile
@@ -91,6 +92,50 @@ class JobService:
             logger.error(f"Error submitting job: {e}", exc_info=True)
             raise
     
+    async def save_sync_analysis(
+        self,
+        user_id: str,
+        filename: Optional[str],
+        result: Dict[str, Any],
+    ) -> str:
+        """
+        Save a synchronous (direct) analysis result as a job record so it appears in History.
+        
+        Args:
+            user_id: User ID
+            filename: Original video filename
+            result: Analysis result dict (e.g. from MultiModelResponse)
+            
+        Returns:
+            job_id (task_id) for the saved record
+        """
+        job_id = f"sync_{uuid.uuid4().hex}"
+        now = datetime.now()
+        # Ensure result has top-level predicted_emotion/confidence for list UI (from first model)
+        result_copy = dict(result) if isinstance(result, dict) else result
+        if isinstance(result_copy, dict) and 'results' in result_copy and result_copy['results']:
+            first = result_copy['results'][0]
+            overall = first.get('overall_prediction') if isinstance(first, dict) else getattr(first, 'overall_prediction', None)
+            if overall:
+                ov = overall if isinstance(overall, dict) else (getattr(overall, '__dict__', {}) or {})
+                result_copy.setdefault('predicted_emotion', ov.get('predicted_emotion'))
+                result_copy.setdefault('confidence', ov.get('confidence'))
+        doc = {
+            'task_id': job_id,
+            'user_id': user_id,
+            'filename': filename or 'video.mp4',
+            'status': 'SUCCESS',
+            'result': result_copy,
+            'created_at': now,
+            'completed_at': now,
+            'sync': True,
+        }
+        if isinstance(result_copy, dict) and result_copy.get('total_processing_time') is not None:
+            doc['processing_time'] = result_copy.get('total_processing_time')
+        self.jobs_collection.insert_one(doc)
+        logger.info(f"Saved sync analysis to history: job_id={job_id}, user={user_id}")
+        return job_id
+
     async def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """
         Get job status and progress.
@@ -102,8 +147,19 @@ class JobService:
             Status information dictionary
         """
         try:
-            task_result = celery_app.AsyncResult(job_id)
             job_doc = self.jobs_collection.find_one({'task_id': job_id})
+            if job_doc and job_doc.get('sync'):
+                return {
+                    'job_id': job_id,
+                    'status': 'SUCCESS',
+                    'progress': 1.0,
+                    'stage': 'completed',
+                    'message': 'Analysis completed successfully',
+                    'created_at': job_doc.get('created_at', '').isoformat() if job_doc.get('created_at') else None,
+                    'completed_at': job_doc.get('completed_at', '').isoformat() if job_doc.get('completed_at') else None,
+                    'processing_time': job_doc.get('processing_time', 0),
+                }
+            task_result = celery_app.AsyncResult(job_id)
             
             if not job_doc:
                 return {
@@ -171,6 +227,14 @@ class JobService:
             Result dictionary
         """
         try:
+            job_doc = self.jobs_collection.find_one({'task_id': job_id})
+            if job_doc and job_doc.get('sync'):
+                return {
+                    'job_id': job_id,
+                    'status': 'SUCCESS',
+                    'message': 'Job completed successfully',
+                    'result': job_doc.get('result'),
+                }
             task_result = celery_app.AsyncResult(job_id)
             
             if task_result.state != 'SUCCESS':
@@ -285,21 +349,33 @@ class JobService:
             
             for job_doc in jobs_cursor:
                 task_id = job_doc.get('task_id')
+                if job_doc.get('sync'):
+                    job_info = {
+                        'job_id': task_id,
+                        'filename': job_doc.get('filename'),
+                        'status': 'SUCCESS',
+                        'created_at': job_doc.get('created_at', '').isoformat() if job_doc.get('created_at') else None,
+                        'result': job_doc.get('result'),
+                    }
+                    if 'completed_at' in job_doc:
+                        job_info['completed_at'] = job_doc['completed_at'].isoformat()
+                    if 'processing_time' in job_doc:
+                        job_info['processing_time'] = job_doc['processing_time']
+                    jobs.append(job_info)
+                    continue
                 task_result = celery_app.AsyncResult(task_id)
-                
                 job_info = {
                     'job_id': task_id,
                     'filename': job_doc.get('filename'),
                     'status': task_result.state,
                     'created_at': job_doc.get('created_at', '').isoformat() if job_doc.get('created_at') else None,
                 }
-                
                 if 'completed_at' in job_doc:
                     job_info['completed_at'] = job_doc['completed_at'].isoformat()
-                
                 if 'processing_time' in job_doc:
                     job_info['processing_time'] = job_doc['processing_time']
-                
+                if task_result.state == 'SUCCESS' and 'result' in job_doc:
+                    job_info['result'] = job_doc['result']
                 jobs.append(job_info)
             
             return jobs

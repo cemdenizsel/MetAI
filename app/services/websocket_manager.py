@@ -108,8 +108,15 @@ class ConnectionManager:
             logger.warning(f"WebSocket disconnected while sending: session={session_id}")
             await self.disconnect(session_id)
         except Exception as e:
-            logger.error(f"Error sending message to {session_id}: {e}")
-            await self.disconnect(session_id)
+            err_str = str(e)
+            if "close message has been sent" in err_str or "close message has been sent" in err_str.lower():
+                # Client already closed; remove session without trying to send again
+                self.active_connections.pop(session_id, None)
+                self.session_users.pop(session_id, None)
+                logger.debug("Removed session %s after send on closed connection", session_id)
+            else:
+                logger.error(f"Error sending message to {session_id}: {e}")
+                await self.disconnect(session_id)
     
     async def send_text(self, session_id: str, text: str):
         """
@@ -131,8 +138,14 @@ class ConnectionManager:
             logger.warning(f"WebSocket disconnected while sending text: session={session_id}")
             await self.disconnect(session_id)
         except Exception as e:
-            logger.error(f"Error sending text to {session_id}: {e}")
-            await self.disconnect(session_id)
+            err_str = str(e)
+            if "close message has been sent" in err_str or "close message has been sent" in err_str.lower():
+                self.active_connections.pop(session_id, None)
+                self.session_users.pop(session_id, None)
+                logger.debug("Removed session %s after send on closed connection", session_id)
+            else:
+                logger.error(f"Error sending text to {session_id}: {e}")
+                await self.disconnect(session_id)
     
     async def broadcast(self, message: Dict[str, Any], exclude: Optional[str] = None):
         """

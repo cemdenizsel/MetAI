@@ -69,11 +69,51 @@ export async function getJobResult(jobId: string): Promise<AnalysisJob> {
   return apiClient<AnalysisJob>(`/api/jobs/${jobId}/result`);
 }
 
+/** Backend response shape for list jobs */
+interface MyJobsResponse {
+  success: boolean;
+  count: number;
+  limit: number;
+  skip: number;
+  jobs: Array<{
+    job_id: string;
+    filename?: string;
+    status: string;
+    created_at: string | null;
+    completed_at?: string;
+    processing_time?: number;
+    result?: unknown;
+    error?: string;
+  }>;
+}
+
 export async function getMyJobs(
   limit: number = 10,
   skip: number = 0
 ): Promise<AnalysisJob[]> {
-  return apiClient<AnalysisJob[]>(`/api/jobs/my-jobs?limit=${limit}&skip=${skip}`);
+  const res = await apiClient<MyJobsResponse>(
+    `/api/jobs/my-jobs?limit=${limit}&skip=${skip}`
+  );
+  if (!res?.jobs || !Array.isArray(res.jobs)) return [];
+  const statusMap: Record<string, AnalysisJob['status']> = {
+    PENDING: 'pending',
+    STARTED: 'processing',
+    PROGRESS: 'processing',
+    SUCCESS: 'success',
+    FAILURE: 'failed',
+    REVOKED: 'failed',
+    RETRY: 'processing',
+  };
+  return res.jobs.map((job) => ({
+    id: job.job_id,
+    user_id: '',
+    filename: job.filename ?? '',
+    status: statusMap[job.status] ?? (job.status.toLowerCase() as AnalysisJob['status']) ?? 'pending',
+    created_at: job.created_at ?? new Date().toISOString(),
+    completed_at: job.completed_at,
+    result: job.result as AnalysisJob['result'],
+    error: job.error,
+  }));
 }
 
 export async function cancelJob(jobId: string): Promise<void> {

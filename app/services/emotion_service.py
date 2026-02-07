@@ -23,6 +23,7 @@ from services.cache_service import get_cache_service
 from models.response_models import (
     MultiModelResponse,
     ModelResults,
+    AIAnalysis,
     OverallPrediction,
     TemporalPrediction,
     MentalHealthAnalysis,
@@ -395,6 +396,22 @@ class EmotionAnalysisService:
                     reasoning=result.prediction.reasoning
                 )
 
+        # AI analysis (OpenAI meeting summary, insights, recommendations)
+        ai_analysis = None
+        if result.ai_analysis:
+            aa = result.ai_analysis
+            ai_analysis = AIAnalysis(
+                summary=getattr(aa, "summary", None),
+                key_insights=getattr(aa, "key_insights", None),
+                emotional_dynamics=getattr(aa, "emotional_dynamics", None),
+                recommendations=getattr(aa, "recommendations", None),
+                knowledge_base_context=getattr(aa, "knowledge_base_context", None),
+                detailed_analysis=getattr(aa, "detailed_analysis", None),
+                raw_llm_response=getattr(aa, "raw_llm_response", None),
+                llm_model=getattr(aa, "llm_model", None),
+                agent_available=getattr(aa, "agent_available", False),
+            )
+
         # Create ModelResults
         return ModelResults(
             model_name=result.prediction.fusion_method if result.prediction else "Unknown",
@@ -409,7 +426,8 @@ class EmotionAnalysisService:
             modality_weights=modality_weights,
             model_agreement=model_agreement,
             maelfabien_predictions=maelfabien_preds,
-            emotion_llama_details=emotion_llama
+            emotion_llama_details=emotion_llama,
+            ai_analysis=ai_analysis,
         )
 
     def _determine_agreement_status(self, models: Dict[str, str], predicted: str) -> str:

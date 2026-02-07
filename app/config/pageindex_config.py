@@ -13,26 +13,29 @@ class PageIndexConfig:
     """
     Configuration class for PageIndex service settings.
     
-    Environment Variables:
-        PAGEINDEX_ENABLED: Enable/disable PageIndex (default: true)
-        PAGEINDEX_MODEL: LLM model for tree building and search (default: gpt-4o)
-        PAGEINDEX_STORAGE: Storage path for tree indices (default: ./pageindex_trees)
-        PAGEINDEX_MAX_PAGES_PER_NODE: Max pages per tree node (default: 10)
-        PAGEINDEX_MAX_TOKENS_PER_NODE: Max tokens per tree node (default: 20000)
-        PAGEINDEX_TOC_CHECK_PAGES: Pages to check for TOC (default: 20)
+    When using PageIndex cloud API (0.2.x):
+    - PAGEINDEX_API_KEY: Required; get from https://dash.pageindex.ai
+    - PAGEINDEX_API_DOCS_DIR: Dir for user->doc mapping (default: ./pageindex_api_docs)
+    
+    Legacy/local-only (unused when using API):
+    - PAGEINDEX_ENABLED, PAGEINDEX_STORAGE, PAGEINDEX_MODEL, etc.
     """
     
     def __init__(self):
         # Enable/disable PageIndex
         self.enabled: bool = os.getenv('PAGEINDEX_ENABLED', 'true').lower() == 'true'
         
-        # LLM Model Configuration
+        # PageIndex Cloud API (required for API-based integration)
+        self.api_key: str = os.getenv('PAGEINDEX_API_KEY', '')
+        self.api_docs_dir: str = os.getenv('PAGEINDEX_API_DOCS_DIR', './pageindex_api_docs')
+        
+        # LLM Model Configuration (local SDK; unused when using API)
         self.model: str = os.getenv('PAGEINDEX_MODEL', 'gpt-4o')
         
-        # Storage Configuration
+        # Storage Configuration (local trees; unused when using API)
         self.storage_path: str = os.getenv('PAGEINDEX_STORAGE', './pageindex_trees')
         
-        # Tree Building Configuration
+        # Tree Building Configuration (local; unused when using API)
         self.max_pages_per_node: int = int(os.getenv('PAGEINDEX_MAX_PAGES_PER_NODE', '10'))
         self.max_tokens_per_node: int = int(os.getenv('PAGEINDEX_MAX_TOKENS_PER_NODE', '20000'))
         self.toc_check_pages: int = int(os.getenv('PAGEINDEX_TOC_CHECK_PAGES', '20'))
@@ -41,10 +44,10 @@ class PageIndexConfig:
         self.search_model: str = os.getenv('PAGEINDEX_SEARCH_MODEL', self.model)
         self.search_timeout: int = int(os.getenv('PAGEINDEX_SEARCH_TIMEOUT', '60'))
         
-        # OpenAI API Key (shared with main app)
-        self.api_key: str = os.getenv('OPENAI_API_KEY', '')
+        # OpenAI API Key (shared with main app; used by local SDK only)
+        self.openai_api_key: str = os.getenv('OPENAI_API_KEY', '')
         
-        # Validation
+        # Validation (only for local tree params)
         if self.max_pages_per_node <= 0:
             raise ValueError("PAGEINDEX_MAX_PAGES_PER_NODE must be positive")
         if self.max_tokens_per_node <= 0:
@@ -53,48 +56,31 @@ class PageIndexConfig:
 
 class HybridRetrievalConfig:
     """
-    Configuration class for hybrid retrieval settings.
+    Configuration for document retrieval (PageIndex only).
     
     Environment Variables:
-        HYBRID_ENABLED: Enable hybrid retrieval (default: true)
-        MERGE_STRATEGY: Merge strategy (llm, weighted, pageindex_first, ragflow_first)
+        HYBRID_ENABLED: Enable retrieval (default: true)
+        MERGE_STRATEGY: Merge strategy (llm, weighted, pageindex_first)
         MERGER_MODEL: LLM model for result merging (default: gpt-4o-mini)
         MERGER_TEMPERATURE: LLM temperature for merging (default: 0.3)
         MERGER_MAX_TOKENS: Max tokens for merge response (default: 2000)
-        RAGFLOW_WEIGHT: Weight for RAGFlow results in weighted merge (default: 0.4)
-        PAGEINDEX_WEIGHT: Weight for PageIndex results in weighted merge (default: 0.6)
+        PAGEINDEX_WEIGHT: Weight for PageIndex results in weighted merge (default: 1.0)
     """
     
     def __init__(self):
-        # Enable/disable hybrid retrieval
         self.enabled: bool = os.getenv('HYBRID_ENABLED', 'true').lower() == 'true'
-        
-        # Default retrieval system preferences
-        self.use_ragflow: bool = os.getenv('USE_RAGFLOW', 'true').lower() == 'true'
         self.use_pageindex: bool = os.getenv('USE_PAGEINDEX', 'true').lower() == 'true'
         
-        # Merge Strategy
         self.merge_strategy: str = os.getenv('MERGE_STRATEGY', 'llm')
-        
-        # LLM Merge Configuration
         self.merger_model: str = os.getenv('MERGER_MODEL', 'gpt-4o-mini')
         self.merger_temperature: float = float(os.getenv('MERGER_TEMPERATURE', '0.3'))
         self.merger_max_tokens: int = int(os.getenv('MERGER_MAX_TOKENS', '2000'))
-        
-        # Weighted Merge Configuration
-        self.ragflow_weight: float = float(os.getenv('RAGFLOW_WEIGHT', '0.4'))
-        self.pageindex_weight: float = float(os.getenv('PAGEINDEX_WEIGHT', '0.6'))
-        
-        # OpenAI API Key
+        self.pageindex_weight: float = float(os.getenv('PAGEINDEX_WEIGHT', '1.0'))
         self.api_key: str = os.getenv('OPENAI_API_KEY', '')
         
-        # Validation
-        valid_strategies = ['llm', 'weighted', 'pageindex_first', 'ragflow_first']
+        valid_strategies = ['llm', 'weighted', 'pageindex_first']
         if self.merge_strategy not in valid_strategies:
             raise ValueError(f"MERGE_STRATEGY must be one of: {valid_strategies}")
-        
-        if not (0 <= self.ragflow_weight <= 1):
-            raise ValueError("RAGFLOW_WEIGHT must be between 0 and 1")
         if not (0 <= self.pageindex_weight <= 1):
             raise ValueError("PAGEINDEX_WEIGHT must be between 0 and 1")
 

@@ -64,6 +64,10 @@ except Exception as e:
 # Log the import status immediately
 logging.info(f"AI Agent module loaded - OPENAI_AVAILABLE: {OPENAI_AVAILABLE}, OpenAI: {OpenAI}")
 
+try:
+    from utils.opik_helper import wrap_openai_for_opik
+except ImportError:
+    wrap_openai_for_opik = lambda c, **kw: c  # noqa: E731
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +136,7 @@ class MeetingAnalysisAgent:
                     api_key=self.api_key,
                     base_url=self.base_url
                 )
+                self.client = wrap_openai_for_opik(self.client, project_name="metai-streamlit")
                 logger.info(f"✓ AI Agent client initialized successfully with {self.provider} provider using {self.model}")
             except Exception as e:
                 logger.error(f"✗ Failed to initialize OpenAI client: {e}")
@@ -360,21 +365,26 @@ to provide actionable insights. Your analysis should be professional, empathetic
         
         return parsed_result
     
+    def _get_meta(self, video_metadata: Any, key: str, default: Any = None) -> Any:
+        """Get a value from video_metadata whether it is a dict or an object."""
+        if isinstance(video_metadata, dict):
+            return video_metadata.get(key, default)
+        return getattr(video_metadata, key, default)
+
     def _build_analysis_prompt(
         self,
         emotion_results: Dict[str, Any],
-        video_metadata: Dict[str, Any],
+        video_metadata: Any,
         transcription: Optional[str],
         kb_context: List[Dict[str, Any]]
     ) -> str:
         """Build the analysis prompt for the LLM."""
-        
         prompt_parts = [
             "# Meeting Video Analysis Request\n",
-            f"## Video Information",
-            f"- Filename: {video_metadata.get('filename', 'Unknown')}",
-            f"- Duration: {video_metadata.get('duration', 0):.1f} seconds",
-            f"- Date: {video_metadata.get('upload_date', 'Unknown')}\n"
+            "## Video Information",
+            f"- Filename: {self._get_meta(video_metadata, 'filename') or 'Unknown'}",
+            f"- Duration: {float(self._get_meta(video_metadata, 'duration', 0)):.1f} seconds",
+            f"- Date: {self._get_meta(video_metadata, 'upload_date') or 'Unknown'}\n"
         ]
         
         # Add emotion analysis (robust with .get() methods)
@@ -599,7 +609,7 @@ to provide actionable insights. Your analysis should be professional, empathetic
             
             analysis["summary"] = (
                 f"The meeting shows predominantly {emotion} emotion with {confidence:.0%} confidence. "
-                f"Duration: {video_metadata.get('duration', 0):.0f} seconds."
+                f"Duration: {float(self._get_meta(video_metadata, 'duration', 0)):.0f} seconds."
             )
             
             # Generate insights based on emotion

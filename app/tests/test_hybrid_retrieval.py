@@ -1,9 +1,9 @@
 """
-Test Cases for Hybrid RAGFlow + PageIndex Retrieval System
+Test Cases for PageIndex Document Retrieval
 
-Tests the complete hybrid retrieval system including:
+Tests the document retrieval system including:
 - PageIndex service
-- Hybrid retrieval service
+- Hybrid retrieval service (PageIndex only)
 - Result merger service
 - Meeting controller endpoints
 """
@@ -23,11 +23,10 @@ os.environ['MERGE_STRATEGY'] = 'weighted'  # Use weighted for testing without LL
 
 from main import app
 from services.pageindex_service import (
-    PageIndexService, 
-    PageIndexLookupRequest, 
+    PageIndexService,
+    PageIndexLookupRequest,
     PageIndexDocumentResult,
-    PageIndexConfig,
-    is_pageindex_available
+    is_pageindex_available,
 )
 from services.hybrid_retrieval_service import (
     HybridRetrievalService, 
@@ -48,13 +47,14 @@ from config.pageindex_config import PageIndexConfig, HybridRetrievalConfig
 # ============================================================================
 
 class TestPageIndexConfig:
-    """Tests for PageIndex configuration."""
+    """Tests for PageIndex configuration (API mode)."""
     
     def test_config_defaults(self):
         """Test default configuration values."""
         config = PageIndexConfig()
         
-        assert config.enabled == True
+        assert config.enabled is True
+        assert config.api_docs_dir == './pageindex_api_docs'
         assert config.model == 'gpt-4o'
         assert config.storage_path == './pageindex_trees'
         assert config.max_pages_per_node == 10
@@ -68,7 +68,7 @@ class TestPageIndexConfig:
         config = PageIndexConfig()
         
         assert config.model == 'gpt-4-turbo'
-        assert config.enabled == False
+        assert config.enabled is False
         
         # Reset
         os.environ['PAGEINDEX_MODEL'] = 'gpt-4o'
@@ -76,15 +76,14 @@ class TestPageIndexConfig:
 
 
 class TestHybridRetrievalConfig:
-    """Tests for hybrid retrieval configuration."""
+    """Tests for document retrieval configuration (PageIndex only)."""
     
     def test_config_defaults(self):
         """Test default configuration values."""
         config = HybridRetrievalConfig()
         
         assert config.enabled == True
-        assert config.merge_strategy in ['llm', 'weighted', 'pageindex_first', 'ragflow_first']
-        assert 0 <= config.ragflow_weight <= 1
+        assert config.merge_strategy in ['llm', 'weighted', 'pageindex_first']
         assert 0 <= config.pageindex_weight <= 1
     
     def test_invalid_strategy_raises(self):
@@ -103,12 +102,12 @@ class TestHybridRetrievalConfig:
 # ============================================================================
 
 class TestPageIndexService:
-    """Tests for PageIndex service."""
+    """Tests for PageIndex service (API mode: mapping + get_user_stats / lookup)."""
     
     @pytest.fixture
     def service(self, tmp_path):
-        """Create a PageIndex service with temporary storage."""
-        os.environ['PAGEINDEX_STORAGE'] = str(tmp_path)
+        """Create a PageIndex service with temporary API docs dir (no API key)."""
+        os.environ['PAGEINDEX_API_DOCS_DIR'] = str(tmp_path)
         return PageIndexService()
     
     def test_service_initialization(self, service):
@@ -117,19 +116,21 @@ class TestPageIndexService:
         assert service.config is not None
     
     def test_get_user_storage_path(self, service):
-        """Test user storage path creation."""
+        """Test user mapping path (file path for kb_user_*)."""
         user_id = "test_user_123"
         path = service._get_user_storage_path(user_id)
         
-        assert path.exists()
+        assert path.parent.exists()
         assert f"kb_user_{user_id}" in str(path)
     
     @pytest.mark.asyncio
-    async def test_get_user_trees_empty(self, service):
-        """Test getting trees for user with no documents."""
-        trees = await service.get_user_trees("nonexistent_user")
+    async def test_get_user_stats_empty(self, service):
+        """Test get_user_stats for user with no documents."""
+        stats = await service.get_user_stats("nonexistent_user")
         
-        assert trees == {}
+        assert stats.get("document_count") == 0
+        assert stats.get("user_id") == "nonexistent_user"
+        assert "total_nodes" in stats or "document_ids" in stats
     
     @pytest.mark.asyncio
     async def test_get_user_stats(self, service):
@@ -138,19 +139,8 @@ class TestPageIndexService:
         
         assert "user_id" in stats
         assert "document_count" in stats
-        assert "total_nodes" in stats
+        assert "total_nodes" in stats or "document_ids" in stats
         assert stats["document_count"] == 0
-    
-    @pytest.mark.asyncio
-    async def test_search_no_documents(self, service):
-        """Test search returns empty when no documents indexed."""
-        results = await service.search(
-            query="test query",
-            user_id="test_user",
-            top_k=5
-        )
-        
-        assert results == []
     
     @pytest.mark.asyncio
     async def test_lookup_with_progress_no_documents(self, service):
@@ -186,26 +176,6 @@ class TestResultMergerService:
         return ResultMergerService(config)
     
     @pytest.fixture
-    def sample_ragflow_results(self):
-        """Sample RAGFlow results."""
-        return [
-            {
-                "document_id": "doc1",
-                "content": "RAGFlow result 1 about quarterly earnings",
-                "page_number": 5,
-                "confidence_score": 0.85,
-                "source_file": "report.pdf"
-            },
-            {
-                "document_id": "doc2",
-                "content": "RAGFlow result 2 about revenue",
-                "page_number": 12,
-                "confidence_score": 0.72,
-                "source_file": "report.pdf"
-            }
-        ]
-    
-    @pytest.fixture
     def sample_pageindex_results(self):
         """Sample PageIndex results."""
         return [
@@ -221,19 +191,18 @@ class TestResultMergerService:
         ]
     
     @pytest.mark.asyncio
-    async def test_weighted_merge(self, merger, sample_ragflow_results, sample_pageindex_results):
-        """Test weighted merge strategy."""
+    async def test_weighted_merge(self, merger, sample_pageindex_results):
+        """Test weighted merge strategy (PageIndex only)."""
         results = await merger.merge(
             query="quarterly earnings",
-            ragflow_results=sample_ragflow_results,
+            ragflow_results=[],
             pageindex_results=sample_pageindex_results,
             top_k=5
         )
         
         assert len(results) > 0
         assert all(isinstance(r, MergedResult) for r in results)
-        # PageIndex result should be ranked higher due to reasoning path bonus
-        assert results[0].source_system == "pageindex" or results[0].reasoning_path is not None
+        assert results[0].source_system == "pageindex"
     
     @pytest.mark.asyncio
     async def test_merge_empty_results(self, merger):
@@ -248,19 +217,6 @@ class TestResultMergerService:
         assert results == []
     
     @pytest.mark.asyncio
-    async def test_merge_ragflow_only(self, merger, sample_ragflow_results):
-        """Test merge with only RAGFlow results."""
-        results = await merger.merge(
-            query="test",
-            ragflow_results=sample_ragflow_results,
-            pageindex_results=[],
-            top_k=5
-        )
-        
-        assert len(results) == len(sample_ragflow_results)
-        assert all(r.source_system == "ragflow" for r in results)
-    
-    @pytest.mark.asyncio
     async def test_merge_pageindex_only(self, merger, sample_pageindex_results):
         """Test merge with only PageIndex results."""
         results = await merger.merge(
@@ -273,18 +229,15 @@ class TestResultMergerService:
         assert len(results) == len(sample_pageindex_results)
         assert all(r.source_system == "pageindex" for r in results)
     
-    def test_priority_merge_pageindex_first(self, merger, sample_ragflow_results, sample_pageindex_results):
-        """Test priority merge with PageIndex first."""
-        normalized_ragflow = merger._normalize_ragflow_results(sample_ragflow_results)
+    def test_priority_merge_pageindex_first(self, merger, sample_pageindex_results):
+        """Test priority merge with PageIndex only."""
         normalized_pageindex = merger._normalize_pageindex_results(sample_pageindex_results)
-        
         results = merger._priority_merge(
             normalized_pageindex,
-            normalized_ragflow,
+            [],
             top_k=5
         )
-        
-        # First result should be from PageIndex
+        assert len(results) > 0
         assert results[0].source_system == "pageindex"
 
 
@@ -293,55 +246,26 @@ class TestResultMergerService:
 # ============================================================================
 
 class TestHybridRetrievalService:
-    """Tests for hybrid retrieval service."""
-    
-    @pytest.fixture
-    def mock_ragflow_service(self):
-        """Create mock RAGFlow service."""
-        service = MagicMock()
-        service.lookup_with_progress = AsyncMock(return_value=iter([
-            {"status": "completed", "results": [
-                {"document_id": "doc1", "content": "test", "confidence_score": 0.8}
-            ]}
-        ]))
-        return service
+    """Tests for document retrieval service (PageIndex only)."""
     
     @pytest.fixture
     def mock_pageindex_service(self):
-        """Create mock PageIndex service."""
+        """Create mock PageIndex service (async generator for lookup_with_progress)."""
+        async def mock_lookup_with_progress(request):
+            yield {"status": "completed", "results": []}
+
         service = MagicMock()
-        service.lookup_with_progress = AsyncMock(return_value=iter([
-            {"status": "completed", "results": []}
-        ]))
+        service.lookup_with_progress = mock_lookup_with_progress
         return service
     
     @pytest.fixture
-    def hybrid_service(self, mock_ragflow_service, mock_pageindex_service):
-        """Create hybrid service with mocks."""
-        return HybridRetrievalService(
-            ragflow_service=mock_ragflow_service,
-            pageindex_service=mock_pageindex_service
-        )
+    def hybrid_service(self, mock_pageindex_service):
+        """Create retrieval service with mocked PageIndex."""
+        return HybridRetrievalService(pageindex_service=mock_pageindex_service)
     
     def test_service_initialization(self, hybrid_service):
         """Test service initializes correctly."""
-        assert hybrid_service.ragflow_service is not None
         assert hybrid_service.pageindex_service is not None
-    
-    def test_fallback_merge(self, hybrid_service):
-        """Test fallback merge when LLM is unavailable."""
-        ragflow_results = [
-            {"content": "test1", "confidence_score": 0.8, "document_id": "doc1"}
-        ]
-        pageindex_results = [
-            {"content": "test2", "confidence_score": 0.9, "document_id": "doc2"}
-        ]
-        
-        merged = hybrid_service._fallback_merge(ragflow_results, pageindex_results, top_k=5)
-        
-        assert len(merged) == 2
-        # Should be sorted by confidence
-        assert merged[0]["confidence_score"] >= merged[1]["confidence_score"]
 
 
 # ============================================================================
@@ -383,11 +307,10 @@ class TestMeetingControllerEndpoints:
         assert response.status_code == 200
         data = response.json()
         
-        assert "hybrid_retrieval" in data
-        assert "ragflow" in data
+        assert "retrieval" in data
         assert "pageindex" in data
-        assert "enabled" in data["hybrid_retrieval"]
-        assert "merge_strategy" in data["hybrid_retrieval"]
+        assert "enabled" in data["retrieval"]
+        assert "merge_strategy" in data["retrieval"]
     
     def test_user_dataset_info_requires_auth(self, client):
         """Test that /meeting/user-dataset-info requires authentication."""
@@ -412,7 +335,6 @@ class TestMeetingControllerEndpoints:
         
         assert "user_id" in data
         assert "dataset_id" in data
-        assert "ragflow" in data
         assert "pageindex" in data
     
     def test_document_lookup_requires_auth(self, client):
@@ -509,7 +431,7 @@ class TestHybridRetrievalIntegration:
                 "meeting_transcript": "Let's discuss the quarterly results",
                 "topic_keywords": ["quarterly", "results"],
                 "top_k": 5,
-                "use_hybrid": True
+                "use_pageindex": True
             },
             headers=headers
         ) as response:
@@ -541,22 +463,20 @@ class TestDataModels:
         
         assert result.document_id == "doc1"
         assert result.retrieval_method == "reasoning"
-        assert len(result.section_path) == 3
+        assert result.section_path is not None and len(result.section_path) == 3
     
     def test_hybrid_lookup_request(self):
-        """Test HybridLookupRequest model."""
+        """Test HybridLookupRequest model (PageIndex only)."""
         request = HybridLookupRequest(
             query="test query",
             user_id="user123",
             dataset_id="kb_user_user123",
             topic_keywords=["keyword1", "keyword2"],
             top_k=10,
-            use_ragflow=True,
             use_pageindex=True
         )
         
         assert request.query == "test query"
-        assert request.use_ragflow == True
         assert request.use_pageindex == True
         assert len(request.topic_keywords) == 2
     

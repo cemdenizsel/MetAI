@@ -131,6 +131,35 @@ streamlit run app.py
 
 5. Open browser at `http://localhost:8501`
 
+## Running from source
+
+### Backend (API)
+
+From the repository root, activate the virtual environment and start the FastAPI server from the `app/` directory:
+
+```bash
+source venv/bin/activate
+cd app
+python -m uvicorn main:app --host 0.0.0.0 --port 8084 --reload
+```
+
+The API will be available at `http://0.0.0.0:8084`.
+
+### Frontend (web app)
+
+From the repository root:
+
+```bash
+cd web_app
+npm run dev
+```
+
+The Next.js app will be available at the URL shown in the terminal (typically `http://localhost:3000`).
+
+### Opik (LLM observability)
+
+MetAI integrates [Opik](https://www.comet.com/site/) for LLM observability and evaluation. When `OPIK_API_KEY`, `OPIK_WORKSPACE`, and (for Comet Cloud) `OPIK_URL_OVERRIDE=https://www.comet.com/opik/api` are set in `app/.env`, all OpenAI calls from the emotion pipeline, Streamlit agent, and result merger are traced to your Opik project. Install `opik` (included in `requirements.txt`) and add your Comet API key and workspace to `app/.env`; see [Opik OpenAI integration](https://www.comet.com/docs/opik/integrations/openai) and [SDK configuration](https://www.comet.com/docs/opik/tracing/sdk_configuration). If traces do not appear, run `opik healthcheck` from the `app` directory to verify config and connectivity. For self-hosting or contributing, see [github.com/comet-ml/opik](https://github.com/comet-ml/opik).
+
 ## Project Structure
 
 ```

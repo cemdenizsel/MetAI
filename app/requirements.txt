@@ -80,6 +80,9 @@ vaderSentiment>=3.3.2
 openai>=1.0.0
 openai-whisper
 
+# Opik (Comet) – LLM observability & evaluation (optional)
+opik>=0.1.0
+
 # Video Processing
 moviepy>=1.0.3
 ffmpeg-python>=0.2.0
@@ -103,10 +106,6 @@ jieba>=0.42.1
 pypinyin>=0.47.0
 pypinyin-dict>=0.1.0
 
-# PageIndex (Vectorless RAG) - Install from GitHub:
-# pip install git+https://github.com/VectifyAI/PageIndex.git
-# pageindex  # Reasoning-based document retrieval (installed separately)
-
-# RAGFlow Integration
-aiohttp>=3.9.0  # Async HTTP client for RAGFlow API
+# PageIndex (Vectorless RAG) - reasoning-based document retrieval (Documents/meeting RAG)
+pageindex>=0.2.4
 tenacity>=8.2.0  # Retry logic for API calls

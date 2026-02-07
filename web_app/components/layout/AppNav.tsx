@@ -17,6 +17,7 @@ import {
   Moon,
   ChevronRight,
   Radio,
+  FileText,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/components/ui/utils';
@@ -36,6 +37,11 @@ const navItems = [
     label: 'Real-Time',
     href: '/realtime',
     icon: Radio,
+  },
+  {
+    label: 'Documents',
+    href: '/documents',
+    icon: FileText,
   },
   {
     label: 'History',

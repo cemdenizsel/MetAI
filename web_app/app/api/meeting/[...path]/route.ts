@@ -8,12 +8,8 @@ async function proxyRequest(
   method: string
 ) {
   const endpoint = path.join('/');
-  const search = request.nextUrl.searchParams.toString();
-  const url = `${API_URL}/api/v1/jobs/${endpoint}${search ? `?${search}` : ''}`;
-  const token =
-    request.cookies.get('auth_token')?.value ||
-    request.headers.get('authorization')?.replace(/^Bearer /i, '').trim() ||
-    request.headers.get('Authorization')?.replace(/^Bearer /i, '').trim();
+  const url = `${API_URL}/meeting/${endpoint}`;
+  const token = request.cookies.get('auth_token')?.value;
 
   const headers: Record<string, string> = {};
 
@@ -46,23 +42,33 @@ async function proxyRequest(
     }
 
     const response = await fetch(url, fetchOptions);
-
     const responseContentType = response.headers.get('content-type') || '';
+
+    if (responseContentType.includes('text/event-stream')) {
+      return new NextResponse(response.body, {
+        status: response.status,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
 
     if (responseContentType.includes('application/json')) {
       const data = await response.json();
       return NextResponse.json(data, { status: response.status });
-    } else {
-      const data = await response.text();
-      return new NextResponse(data, {
-        status: response.status,
-        headers: { 'Content-Type': responseContentType },
-      });
     }
+
+    const data = await response.text();
+    return new NextResponse(data, {
+      status: response.status,
+      headers: { 'Content-Type': responseContentType },
+    });
   } catch (error) {
-    console.error('Jobs API proxy error:', error);
+    console.error('Meeting API proxy error:', error);
     return NextResponse.json(
-      { detail: 'Failed to connect to job processing service' },
+      { detail: 'Failed to connect to meeting service' },
       { status: 503 }
     );
   }
@@ -82,14 +88,6 @@ export async function POST(
 ) {
   const { path } = await params;
   return proxyRequest(request, path, 'POST');
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  const { path } = await params;
-  return proxyRequest(request, path, 'PUT');
 }
 
 export async function DELETE(

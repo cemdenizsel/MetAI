@@ -260,13 +260,27 @@ class EmotionAnalysisPipeline:
                     'mental_health_analysis': results.get('mental_health_analysis')
                 }
                 
+                # metadata can be dict or VideoMetadata dataclass
+                meta = stage1_result.get('metadata')
+                if isinstance(meta, dict):
+                    duration = meta.get('duration', 0)
+                    filename_from_meta = meta.get('filename')
+                else:
+                    duration = getattr(meta, 'duration', 0) if meta else 0
+                    filename_from_meta = getattr(meta, 'filename', None) if meta else None
                 video_meta = {
-                    'filename': options.get('filename', 'video.mp4'),
-                    'duration': stage1_result.get('metadata', {}).get('duration', 0),
+                    'filename': options.get('filename') or filename_from_meta or 'video.mp4',
+                    'duration': duration,
                     'upload_date': options.get('upload_date', 'Unknown')
                 }
                 
-                transcription = stage1_result.get('transcription', {}).get('text', '')
+                trans_obj = stage1_result.get('transcription')
+                if trans_obj is None:
+                    transcription = ''
+                elif isinstance(trans_obj, dict):
+                    transcription = trans_obj.get('text', '')
+                else:
+                    transcription = getattr(trans_obj, 'text', '') or ''
                 context_query = options.get('context_query', f"meeting analysis video call {transcription[:200] if transcription else ''}")
                 
                 # Generate AI analysis

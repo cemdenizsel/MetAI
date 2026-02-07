@@ -21,6 +21,15 @@ import * as emotionApi from '@/lib/api/emotion';
 import type { AnalysisJob } from '@/types/emotion';
 import { AnalysisResults } from '@/components/emotion/AnalysisResults';
 
+/** Emotion/confidence for list display (sync result has top-level; full response has results[0].overall_prediction) */
+function getDisplayEmotion(result: AnalysisJob['result']) {
+  if (!result) return null;
+  const r = result as Record<string, unknown>;
+  const emotion = r?.predicted_emotion ?? (r?.results as Array<{ overall_prediction?: { predicted_emotion?: string; confidence?: number } }>)?.[0]?.overall_prediction?.predicted_emotion;
+  const confidence = r?.confidence ?? (r?.results as Array<{ overall_prediction?: { confidence?: number } }>)?.[0]?.overall_prediction?.confidence;
+  return emotion != null && confidence != null ? { predicted_emotion: emotion, confidence: Number(confidence) } : null;
+}
+
 const ITEMS_PER_PAGE = 10;
 
 export default function HistoryPage() {
@@ -253,16 +262,19 @@ export default function HistoryPage() {
                     </span>
                   </div>
 
-                  {job.status === 'success' && job.result && (
-                    <div className="hidden md:block text-right min-w-[100px]">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                        {job.result.predicted_emotion}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {Math.round(job.result.confidence * 100)}%
-                      </p>
-                    </div>
-                  )}
+                  {job.status === 'success' && (() => {
+                    const display = getDisplayEmotion(job.result);
+                    return display ? (
+                      <div className="hidden md:block text-right min-w-[100px]">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                          {display.predicted_emotion}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {Math.round(display.confidence * 100)}%
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
 
                   <div className="flex items-center gap-1">
                     {job.status === 'success' && job.result && (

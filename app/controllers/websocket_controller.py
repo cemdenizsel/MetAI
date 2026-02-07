@@ -110,9 +110,10 @@ async def websocket_analyze(
         logger.info(f"WebSocket connection attempt from user: {user_email}")
         
         realtime_service = RealtimeAnalysisService()
-        
+        client_host = websocket.client[0] if getattr(websocket, "client", None) else None
+
         try:
-            session_id = await realtime_service.create_session(user_id)
+            session_id = await realtime_service.create_session(user_id, client_host=client_host)
         except Exception as e:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason=str(e))
             logger.error(f"Session creation failed: {e}")
@@ -125,7 +126,10 @@ async def websocket_analyze(
         while True:
             try:
                 message = await websocket.receive()
-                
+                if message.get("type") == "websocket.disconnect":
+                    logger.info(f"WebSocket disconnect received: session={session_id}")
+                    break
+
                 if "text" in message:
                     data = json.loads(message["text"])
                     await handle_text_message(data, session_id, realtime_service)
@@ -139,6 +143,11 @@ async def websocket_analyze(
             except WebSocketDisconnect:
                 logger.info(f"WebSocket disconnected: session={session_id}")
                 break
+            except RuntimeError as e:
+                if "disconnect message has been received" in str(e):
+                    logger.info(f"WebSocket closed by client: session={session_id}")
+                    break
+                raise
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {e}")
                 await connection_manager.send_error(

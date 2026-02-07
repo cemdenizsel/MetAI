@@ -7,6 +7,26 @@ FastAPI application for multimodal emotion recognition.
 import logging
 import sys
 from pathlib import Path
+
+# Load .env first so OPIK_*, OPENAI_*, MONGODB_*, etc. are set before any other imports
+import os
+from dotenv import load_dotenv
+_app_dir = Path(__file__).resolve().parent
+load_dotenv(_app_dir / ".env")
+
+# Configure Opik before any other code imports it (required for traces to reach Comet Cloud)
+# See: https://comet.com/docs/opik/tracing/sdk_configuration
+try:
+    import opik
+    if os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"):
+        opik.configure(
+            api_key=os.environ.get("OPIK_API_KEY"),
+            workspace=os.environ.get("OPIK_WORKSPACE"),
+            use_local=False,
+        )
+except Exception:
+    pass
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,7 +34,7 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 
 # Add current directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(_app_dir))
 
 
 # Configure logging

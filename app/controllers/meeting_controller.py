@@ -1,7 +1,7 @@
 """
 Meeting Document Lookup Controller
 
-Handles document lookup during meetings using hybrid RAGFlow + PageIndex integration.
+Handles document lookup during meetings using PageIndex.
 Provides authenticated endpoints with Server-Sent Events for real-time updates.
 """
 
@@ -17,7 +17,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from utils.auth import get_current_user_email
-from services.ragflow_service import RAGFlowService, RAGFlowLookupRequest
 from services.hybrid_retrieval_service import HybridRetrievalService, HybridLookupRequest
 from services.pageindex_service import PageIndexService, is_pageindex_available
 from config.pageindex_config import get_hybrid_config
@@ -29,15 +28,13 @@ logger = logging.getLogger(__name__)
 
 class MeetingDocumentLookupRequest(BaseModel):
     """
-    Request model for meeting document lookup.
+    Request model for meeting document lookup (PageIndex).
     """
     meeting_transcript: str
     topic_keywords: list[str] = []
     context_window: int = 500
     top_k: int = 5
-    use_hybrid: bool = True  # Use hybrid retrieval (RAGFlow + PageIndex)
-    use_ragflow: bool = True  # Use RAGFlow vector search
-    use_pageindex: bool = True  # Use PageIndex reasoning search
+    use_pageindex: bool = True
 
 
 class DocumentIndexRequest(BaseModel):
@@ -47,12 +44,138 @@ class DocumentIndexRequest(BaseModel):
     document_id: Optional[str] = None  # Optional custom document ID
 
 
+class AskRequest(BaseModel):
+    """
+    Request model for RAG-first chat (ask a question; answer from docs or OpenAI).
+    """
+    message: str
+
+
+@router.post(
+    "/ask",
+    summary="Ask a question (RAG-first, then OpenAI fallback)",
+    description="""
+    Sends the user's question to the backend. The backend searches the user's
+    indexed documents (PageIndex). If relevant chunks are found, the answer
+    is generated from them (RAG). Otherwise the answer is from OpenAI only.
+    Returns answer, source ('rag' or 'openai'), and optional citations.
+    """
+)
+async def meeting_ask(
+    body: AskRequest,
+    current_user_email: str = Depends(get_current_user_email)
+):
+    """
+    Answer a user question: PageIndex Chat API when PageIndex is available; else retrieval + OpenAI or OpenAI only.
+    """
+    user_id = current_user_email.replace('@', '_').replace('.', '_')
+    dataset_id = f"kb_user_{user_id}"
+    hybrid_config = get_hybrid_config()
+    use_pageindex = hybrid_config.use_pageindex and is_pageindex_available()
+    top_k = 5
+
+    # PageIndex: use Chat API over all user docs (one call, no retrieval + OpenAI)
+    if use_pageindex:
+        pageindex_service = PageIndexService()
+        chat_result = await pageindex_service.ask_chat(user_id, body.message)
+        if chat_result and chat_result.get("answer"):
+            # Resolve citation doc ref (filename/api_doc_id) to user-facing document_id
+            user_docs = (await pageindex_service.get_user_stats(user_id)).get("documents", [])
+            doc_by_filename = {d.get("filename"): d.get("document_id") for d in user_docs if d.get("filename")}
+            doc_by_api_id = {d.get("api_doc_id"): d.get("document_id") for d in user_docs if d.get("api_doc_id")}
+
+            def _resolve_document_id(c):
+                ref = c.get("document_id") or c.get("doc_id") or ""
+                display_id = doc_by_filename.get(ref) or doc_by_api_id.get(ref) or ref
+                return {
+                    "document_id": display_id,
+                    "content_snippet": (c.get("content_snippet") or c.get("content") or "")[:200],
+                    "page_number": c.get("page_number"),
+                    "source_system": "pageindex",
+                }
+
+            citations = [_resolve_document_id(c) for c in chat_result.get("citations", [])]
+            return {"answer": chat_result["answer"], "source": "rag", "citations": citations}
+
+    # Fallback: retrieval + OpenAI when PageIndex is on
+    chunks = []
+    if use_pageindex:
+        try:
+            hybrid_service = HybridRetrievalService()
+            lookup_request = HybridLookupRequest(
+                query=body.message,
+                user_id=user_id,
+                dataset_id=dataset_id,
+                top_k=top_k,
+                use_pageindex=use_pageindex,
+            )
+            results = await hybrid_service.lookup(lookup_request)
+            if results:
+                chunks = [r.model_dump() if hasattr(r, 'model_dump') else r for r in results]
+        except Exception as e:
+            logger.warning(f"Retrieval failed for ask: {e}")
+
+    # 3. Build prompt and call OpenAI
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+    except ImportError:
+        raise HTTPException(status_code=503, detail="OpenAI library not available")
+
+    if chunks:
+        # RAG: answer from context
+        context_parts = []
+        for i, c in enumerate(chunks[:5], 1):
+            content = c.get("content", "")[:800]
+            doc_id = c.get("document_id", "")
+            page = c.get("page_number")
+            context_parts.append(f"[{i}] (doc: {doc_id}" + (f", p.{page}" if page is not None else "") + f")\n{content}")
+        context_text = "\n\n".join(context_parts)
+        system = (
+            "You are a helpful assistant. Answer the user's question using ONLY the following excerpts from their documents. "
+            "If the answer is not in the excerpts, say so clearly. Keep answers concise. Cite which excerpt (number) when relevant."
+        )
+        user_content = f"Context from the user's documents:\n\n{context_text}\n\nUser question: {body.message}"
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
+            max_tokens=1000,
+        )
+        answer = response.choices[0].message.content if response.choices else ""
+        citations = [
+            {
+                "document_id": c.get("document_id"),
+                "content_snippet": (c.get("content") or "")[:200],
+                "page_number": c.get("page_number"),
+                "source_system": c.get("source_system"),
+            }
+            for c in chunks[:5]
+        ]
+        return {"answer": answer, "source": "rag", "citations": citations}
+    else:
+        # Fallback: answer from OpenAI only
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": body.message}],
+            max_tokens=1000,
+        )
+        answer = response.choices[0].message.content if response.choices else ""
+        return {"answer": answer, "source": "openai"}
+
+
 @router.post(
     "/document-lookup",
     summary="Lookup relevant documents during meeting",
     description="""
-    Performs real-time document lookup based on meeting transcript.
-    Uses hybrid retrieval combining RAGFlow (vector-based) and PageIndex (reasoning-based).
+    Performs document lookup based on meeting transcript using PageIndex.
     Returns results via Server-Sent Events for progressive loading.
     """,
     response_class=StreamingResponse
@@ -62,149 +185,52 @@ async def meeting_document_lookup(
     current_user_email: str = Depends(get_current_user_email)
 ):
     """
-    Lookup relevant documents during a meeting based on transcript and keywords.
-    
-    Uses hybrid retrieval that:
-    1. Queries RAGFlow (vector-based) and PageIndex (reasoning-based) in parallel
-    2. Merges results using LLM-based ranking
-    3. Returns unified, ranked results
-    
-    Args:
-        request: Meeting document lookup request with transcript and keywords
-        current_user_email: Authenticated user's email from JWT token
-    
-    Returns:
-        StreamingResponse: Server-Sent Events stream with lookup progress and results
+    Lookup relevant documents during a meeting (PageIndex).
     """
-    # Get configuration
     hybrid_config = get_hybrid_config()
-    
-    # Create user ID from email
     user_id = current_user_email.replace('@', '_').replace('.', '_')
     dataset_id = f"kb_user_{user_id}"
-    
-    # Determine which retrieval mode to use
-    use_hybrid = request.use_hybrid and hybrid_config.enabled
-    use_ragflow = request.use_ragflow and hybrid_config.use_ragflow
     use_pageindex = request.use_pageindex and hybrid_config.use_pageindex and is_pageindex_available()
-    
-    # If hybrid mode with both systems available
-    if use_hybrid and (use_ragflow or use_pageindex):
-        return await _hybrid_document_lookup(
-            request=request,
-            user_id=user_id,
-            dataset_id=dataset_id,
-            current_user_email=current_user_email,
-            use_ragflow=use_ragflow,
-            use_pageindex=use_pageindex
-        )
-    else:
-        # Fallback to RAGFlow only
-        return await _ragflow_only_lookup(
-            request=request,
-            dataset_id=dataset_id,
-            current_user_email=current_user_email
+
+    if not use_pageindex:
+        async def no_system_stream():
+            yield f"data: {json.dumps({'status': 'error', 'message': 'PageIndex is not enabled. Set PAGEINDEX_API_KEY.', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
+        return StreamingResponse(
+            no_system_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Access-Control-Allow-Origin": "*"},
         )
 
-
-async def _hybrid_document_lookup(
-    request: MeetingDocumentLookupRequest,
-    user_id: str,
-    dataset_id: str,
-    current_user_email: str,
-    use_ragflow: bool,
-    use_pageindex: bool
-) -> StreamingResponse:
-    """Perform hybrid document lookup using both RAGFlow and PageIndex."""
-    
     hybrid_service = HybridRetrievalService()
-    
-    async def event_generator():
-        try:
-            # Send initial event
-            yield f"data: {json.dumps({'status': 'started', 'message': 'Starting hybrid document lookup...', 'mode': 'hybrid', 'systems': {'ragflow': use_ragflow, 'pageindex': use_pageindex}, 'timestamp': asyncio.get_event_loop().time()})}\n\n"
-            
-            # Prepare hybrid lookup request
-            lookup_request = HybridLookupRequest(
-                query=request.meeting_transcript,
-                user_id=user_id,
-                dataset_id=dataset_id,
-                topic_keywords=request.topic_keywords,
-                context_window=request.context_window,
-                top_k=request.top_k,
-                use_ragflow=use_ragflow,
-                use_pageindex=use_pageindex
-            )
-            
-            # Perform hybrid lookup with progress updates
-            async for result in hybrid_service.lookup_with_progress(lookup_request, current_user_email):
-                yield f"data: {json.dumps(result)}\n\n"
-                
-        except Exception as e:
-            logger.error(f"Error in hybrid document lookup: {str(e)}", exc_info=True)
-            yield f"data: {json.dumps({'status': 'error', 'message': f'Lookup failed: {str(e)}', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-        }
+    lookup_request = HybridLookupRequest(
+        query=request.meeting_transcript,
+        user_id=user_id,
+        dataset_id=dataset_id,
+        topic_keywords=request.topic_keywords,
+        context_window=request.context_window,
+        top_k=request.top_k,
+        use_pageindex=True,
     )
 
-
-async def _ragflow_only_lookup(
-    request: MeetingDocumentLookupRequest,
-    dataset_id: str,
-    current_user_email: str
-) -> StreamingResponse:
-    """Fallback to RAGFlow-only document lookup."""
-    
-    ragflow_service = RAGFlowService()
-    
     async def event_generator():
         try:
-            yield f"data: {json.dumps({'status': 'started', 'message': 'Starting document lookup (RAGFlow only)...', 'mode': 'ragflow', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
-            
-            lookup_request = RAGFlowLookupRequest(
-                query=request.meeting_transcript,
-                dataset_ids=[dataset_id],
-                topic_keywords=request.topic_keywords,
-                context_window=request.context_window,
-                top_k=request.top_k
-            )
-            
-            yield f"data: {json.dumps({'status': 'searching', 'message': 'Searching relevant documents...', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
-            
-            async for result in ragflow_service.lookup_with_progress(lookup_request, current_user_email):
+            async for result in hybrid_service.lookup_with_progress(lookup_request, current_user_email):
                 yield f"data: {json.dumps(result)}\n\n"
-                
         except Exception as e:
-            logger.error(f"Error in RAGFlow document lookup: {str(e)}", exc_info=True)
+            logger.error(f"Error in document lookup: {str(e)}", exc_info=True)
             yield f"data: {json.dumps({'status': 'error', 'message': f'Lookup failed: {str(e)}', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
-        finally:
-            yield f"data: {json.dumps({'status': 'completed', 'message': 'Document lookup completed', 'timestamp': asyncio.get_event_loop().time()})}\n\n"
-    
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-        }
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "Access-Control-Allow-Origin": "*"},
     )
 
 
 @router.post(
     "/index-document",
     summary="Index document for PageIndex reasoning-based search",
-    description="""
-    Builds a PageIndex tree structure for a document, enabling reasoning-based search.
-    This runs in addition to RAGFlow indexing for hybrid retrieval.
-    """
+    description="Builds a PageIndex tree structure for a document, enabling reasoning-based search."
 )
 async def index_document_for_pageindex(
     document: UploadFile = File(..., description="PDF document to index"),
@@ -319,47 +345,23 @@ async def delete_document_pageindex(
 @router.get(
     "/user-dataset-info",
     summary="Get user's dataset information",
-    description="Returns information about the user's document datasets in both RAGFlow and PageIndex"
+    description="Returns information about the user's document datasets (PageIndex)."
 )
 async def get_user_dataset_info(
     current_user_email: str = Depends(get_current_user_email)
 ):
     """
-    Get information about the user's document datasets.
-    
-    Args:
-        current_user_email: Authenticated user's email from JWT token
-    
-    Returns:
-        Dictionary with dataset information from both RAGFlow and PageIndex
+    Get information about the user's document datasets (PageIndex).
     """
     user_id = current_user_email.replace('@', '_').replace('.', '_')
     dataset_id = f"kb_user_{user_id}"
-    
     result = {
         "user_id": user_id,
         "user_email": current_user_email,
         "dataset_id": dataset_id,
-        "ragflow": None,
         "pageindex": None
     }
-    
-    # Get RAGFlow info
-    try:
-        ragflow_service = RAGFlowService()
-        ragflow_info = await ragflow_service.get_dataset_info(dataset_id)
-        result["ragflow"] = {
-            "available": True,
-            "info": ragflow_info
-        }
-    except Exception as e:
-        logger.error(f"Error getting RAGFlow dataset info: {str(e)}")
-        result["ragflow"] = {
-            "available": False,
-            "error": str(e)
-        }
-    
-    # Get PageIndex info
+
     if is_pageindex_available():
         try:
             pageindex_service = PageIndexService()
@@ -382,32 +384,21 @@ async def get_user_dataset_info(
             "enabled": False,
             "message": "PageIndex is not installed or disabled"
         }
-    
     return result
 
 
 @router.get(
     "/retrieval-status",
     summary="Get retrieval system status",
-    description="Returns the status and availability of all retrieval systems"
+    description="Returns the status of PageIndex retrieval."
 )
 async def get_retrieval_status():
-    """
-    Get status of all retrieval systems.
-    
-    Returns:
-        Dictionary with system statuses
-    """
+    """Get status of PageIndex retrieval."""
     hybrid_config = get_hybrid_config()
-    
     return {
-        "hybrid_retrieval": {
+        "retrieval": {
             "enabled": hybrid_config.enabled,
             "merge_strategy": hybrid_config.merge_strategy
-        },
-        "ragflow": {
-            "enabled": hybrid_config.use_ragflow,
-            "available": True  # RAGFlow is always available if configured
         },
         "pageindex": {
             "enabled": hybrid_config.use_pageindex,

@@ -1,8 +1,7 @@
 """
 Result Merger Service
 
-Uses LLM to intelligently merge and rank results from RAGFlow (vector-based)
-and PageIndex (reasoning-based) retrieval systems.
+Merges and ranks PageIndex retrieval results (optionally with LLM).
 """
 
 import json
@@ -25,17 +24,21 @@ try:
 except ImportError:
     logger.warning("OpenAI not available for ResultMergerService")
 
+try:
+    from utils.opik_helper import wrap_openai_for_opik
+except ImportError:
+    wrap_openai_for_opik = lambda c, **kw: c  # noqa: E731
+
 
 class MergeStrategy:
     """Merge strategy constants."""
     LLM = "llm"  # Use LLM to rank and deduplicate
     WEIGHTED = "weighted"  # Simple weighted scoring
-    PAGEINDEX_FIRST = "pageindex_first"  # Prefer PageIndex, then RAGFlow
-    RAGFLOW_FIRST = "ragflow_first"  # Prefer RAGFlow, then PageIndex
+    PAGEINDEX_FIRST = "pageindex_first"  # Use PageIndex results as-is (ranked by confidence)
 
 
 class ResultMergerConfig:
-    """Configuration for result merger."""
+    """Configuration for result merger (PageIndex only)."""
     
     def __init__(self):
         self.strategy: str = os.getenv('MERGE_STRATEGY', MergeStrategy.LLM)
@@ -43,10 +46,7 @@ class ResultMergerConfig:
         self.api_key: str = os.getenv('OPENAI_API_KEY', '')
         self.temperature: float = float(os.getenv('MERGER_TEMPERATURE', '0.3'))
         self.max_tokens: int = int(os.getenv('MERGER_MAX_TOKENS', '2000'))
-        
-        # Weights for weighted merge strategy
-        self.ragflow_weight: float = float(os.getenv('RAGFLOW_WEIGHT', '0.4'))
-        self.pageindex_weight: float = float(os.getenv('PAGEINDEX_WEIGHT', '0.6'))
+        self.pageindex_weight: float = float(os.getenv('PAGEINDEX_WEIGHT', '1.0'))
 
 
 class MergedResult(BaseModel):
@@ -57,7 +57,7 @@ class MergedResult(BaseModel):
     section_title: Optional[str] = None
     confidence_score: float
     source_file: Optional[str] = None
-    source_system: str  # "ragflow", "pageindex", or "both"
+    source_system: str  # "pageindex" or "both"
     retrieval_method: str  # "vector", "reasoning", or "hybrid"
     reasoning_path: Optional[List[str]] = None
     bbox_coordinates: Optional[List[float]] = None
@@ -68,13 +68,9 @@ class MergedResult(BaseModel):
 
 class ResultMergerService:
     """
-    Service for merging results from multiple retrieval systems.
+    Service for merging/ranking PageIndex retrieval results.
     
-    Supports multiple merge strategies:
-    - LLM: Uses GPT to intelligently rank and deduplicate
-    - Weighted: Simple weighted scoring based on confidence
-    - PageIndex First: Prioritizes reasoning-based results
-    - RAGFlow First: Prioritizes vector-based results
+    Strategies: llm (LLM rank), weighted (confidence), pageindex_first (as-is).
     """
 
     def __init__(self, config: ResultMergerConfig = None):
@@ -84,6 +80,7 @@ class ResultMergerService:
         if OPENAI_AVAILABLE and self.config.api_key:
             try:
                 self.client = OpenAI(api_key=self.config.api_key)
+                self.client = wrap_openai_for_opik(self.client, project_name="metai-merger")
                 logger.info(f"ResultMergerService initialized with LLM: {self.config.model}")
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI client: {e}")
@@ -98,52 +95,17 @@ class ResultMergerService:
         top_k: int = 5
     ) -> List[MergedResult]:
         """
-        Merge results from RAGFlow and PageIndex.
-        
-        Args:
-            query: Original search query
-            ragflow_results: Results from RAGFlow (vector-based)
-            pageindex_results: Results from PageIndex (reasoning-based)
-            top_k: Maximum number of results to return
-            
-        Returns:
-            List of merged and ranked results
+        Merge/rank results (PageIndex only; ragflow_results ignored).
         """
-        # Normalize results to common format
-        normalized_ragflow = self._normalize_ragflow_results(ragflow_results)
         normalized_pageindex = self._normalize_pageindex_results(pageindex_results)
-        
-        # Choose merge strategy
-        if self.config.strategy == MergeStrategy.LLM and self.client:
+        normalized_ragflow = []  # RAGFlow removed; keep param for API compatibility
+
+        if self.config.strategy == MergeStrategy.LLM and self.client and normalized_pageindex:
             return await self._llm_merge(query, normalized_ragflow, normalized_pageindex, top_k)
         elif self.config.strategy == MergeStrategy.PAGEINDEX_FIRST:
             return self._priority_merge(normalized_pageindex, normalized_ragflow, top_k)
-        elif self.config.strategy == MergeStrategy.RAGFLOW_FIRST:
-            return self._priority_merge(normalized_ragflow, normalized_pageindex, top_k)
         else:
-            # Default to weighted merge
             return self._weighted_merge(normalized_ragflow, normalized_pageindex, top_k)
-
-    def _normalize_ragflow_results(self, results: List[Dict]) -> List[Dict]:
-        """Normalize RAGFlow results to common format."""
-        normalized = []
-        
-        for r in results:
-            normalized.append({
-                "document_id": r.get("document_id", "unknown"),
-                "content": r.get("content", ""),
-                "page_number": r.get("page_number"),
-                "section_title": None,
-                "confidence_score": r.get("confidence_score", r.get("score", 0.0)),
-                "source_file": r.get("source_file", r.get("filename")),
-                "source_system": "ragflow",
-                "retrieval_method": "vector",
-                "reasoning_path": None,
-                "bbox_coordinates": r.get("bbox_coordinates"),
-                "metadata": r.get("metadata", {})
-            })
-        
-        return normalized
 
     def _normalize_pageindex_results(self, results: List[Dict]) -> List[Dict]:
         """Normalize PageIndex results to common format."""
@@ -190,7 +152,7 @@ class ResultMergerService:
                         "content": """You are an expert document retrieval ranker. Your job is to merge and rank 
 search results from two different retrieval systems:
 
-1. RAGFlow (vector-based): Uses semantic similarity to find relevant content
+1. PageIndex (reasoning-based): Uses document structure and reasoning
 2. PageIndex (reasoning-based): Uses LLM reasoning through document structure to find relevant sections
 
 Your task is to:
@@ -296,7 +258,7 @@ Return a JSON object with this structure:
       "section_title": "...",
       "confidence_score": 0.95,
       "source_file": "...",
-      "source_system": "ragflow|pageindex|both",
+      "source_system": "pageindex|both",
       "retrieval_method": "vector|reasoning|hybrid",
       "reasoning_path": ["Section1", "Subsection"],
       "rank_reason": "Brief explanation of why this result is ranked here"
@@ -321,16 +283,6 @@ Important:
         """Simple weighted merge based on confidence scores."""
         
         all_results = []
-        
-        # Apply weights to RAGFlow results
-        for r in ragflow_results:
-            score = r.get("confidence_score", 0) * self.config.ragflow_weight
-            all_results.append({
-                **r,
-                "weighted_score": score,
-                "source_system": "ragflow",
-                "retrieval_method": "vector"
-            })
         
         # Apply weights to PageIndex results (with bonus for having section info)
         for r in pageindex_results:

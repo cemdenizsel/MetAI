@@ -34,13 +34,14 @@ class RealtimeAnalysisService:
         
         logger.info("RealtimeAnalysisService initialized")
     
-    async def create_session(self, user_id: str, request=None) -> str:
+    async def create_session(self, user_id: str, request=None, client_host: Optional[str] = None) -> str:
         """
         Create a new real-time analysis session.
         
         Args:
             user_id: User ID
-            request: Optional request object for localhost check
+            request: Optional request object for localhost check (HTTP)
+            client_host: Optional client host (e.g. from WebSocket) for localhost check
             
         Returns:
             Session ID
@@ -48,7 +49,7 @@ class RealtimeAnalysisService:
         Raises:
             Exception: If subscription validation fails
         """
-        await self._validate_subscription(user_id, request)
+        await self._validate_subscription(user_id, request=request, client_host=client_host)
         
         session_id = self.analyzer.create_session(user_id)
         
@@ -246,19 +247,20 @@ class RealtimeAnalysisService:
         
         return summary
     
-    async def _validate_subscription(self, user_id: str, request=None):
+    async def _validate_subscription(self, user_id: str, request=None, client_host: Optional[str] = None):
         """
         Validate user subscription for real-time analysis.
         
         Args:
             user_id: User ID
-            request: Optional request object
+            request: Optional request object (HTTP)
+            client_host: Optional client host (e.g. WebSocket client) for localhost check
             
         Raises:
             Exception: If subscription validation fails
         """
         try:
-            if self._is_dev_or_local(request):
+            if self._is_dev_or_local(request, client_host=client_host):
                 logger.info(f"Skipping subscription check for local/dev: user {user_id}")
                 return
             
@@ -277,18 +279,19 @@ class RealtimeAnalysisService:
             logger.error(f"Subscription validation failed: {e}")
             raise
     
-    def _is_dev_or_local(self, request=None) -> bool:
-        """Check if running in dev/local environment."""
+    def _is_dev_or_local(self, request=None, client_host: Optional[str] = None) -> bool:
+        """Check if running in dev/local environment or connection from localhost."""
         app_env = os.getenv("APP_ENV", "").lower()
         if app_env in {"dev", "development", "local", "test", "testing"}:
             return True
-        
+        # WebSocket: no HTTP request; pass client_host to allow localhost connections
+        if client_host and str(client_host).strip().lower() in ("127.0.0.1", "::1", "localhost"):
+            return True
         if request is None:
             return False
-        
         try:
             return bool(is_localhost(request))
-        except:
+        except Exception:
             return False
     
     def get_active_session_count(self) -> int:
