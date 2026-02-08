@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # Backend API
+  api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: metai-api
+    ports:
+      - "8084:8084"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8084
+      - MONGODB_CONNECTION_STRING=mongodb://mongodb:27017
+      - MONGODB_DATABASE=metai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - ./app/.env
+    volumes:
+      - ./app/logs:/app/logs
+      - ./app/temp_uploads:/app/temp_uploads
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - metai-network
+    restart: unless-stopped
+
+  # Frontend Web App
+  web:
+    build:
+      context: ./web_app
+      dockerfile: Dockerfile
+    container_name: metai-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8084
+    env_file:
+      - ./web_app/.env.local
+    depends_on:
+      - api
+    networks:
+      - metai-network
+    restart: unless-stopped
+
+  # MongoDB
+  mongodb:
+    image: mongo:7
+    container_name: metai-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - metai-network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: metai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - metai-network
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+  redis-data:
+
+networks:
+  metai-network:
+    driver: bridge

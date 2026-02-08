@@ -4,15 +4,35 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
-build/
-
-# Virtual environments
-emotion_env/
-venv/
 env/
+venv/
 ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -20,68 +40,24 @@ ENV/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
-
-# Data and results (don't include in Docker image)
-data_model/raw/*
-data_model/processed/*
-data_model/results/*
-!data_model/raw/.gitkeep
-!data_model/processed/.gitkeep
-!data_model/results/.gitkeep
-
-# Pretrained ai_models (download separately or mount as volume)
-pretrained/*
-!pretrained/.gitkeep
-
-# Notebooks
-notebooks/
-*.ipynb
-
-# Tests
-tests/
-*_test.py
-test_*.py
-
-# Design files
-design/
-
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Documentation
-*.md
-!README.md
+Thumbs.db
 
 # Logs
 *.log
 logs/
 
 # Temporary files
-tmp/
-temp/
+temp_uploads/
 *.tmp
 
-# Mac
-.DS_Store
+# Git
+.git
+.gitignore
 
-# Windows
-Thumbs.db
-
-# Streamlit (not needed for API)
-.streamlit/
-
-# Android source (not needed for API)
-src/main/
-src/androidTest/
-src/test/
-
-# Gradle (not needed for API)
-gradle/
-gradlew
-gradlew.bat
-*.gradle
-*.properties
-
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

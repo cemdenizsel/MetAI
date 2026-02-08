@@ -1,0 +1,72 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: metai-ingress
+  namespace: metai
+  annotations:
+    # Nginx Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    
+    # Rate limiting (optional)
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    
+    # CORS (optional)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    
+    # Certificate manager (if using cert-manager)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx  # or your ingress class
+  # TLS configuration (uncomment and configure for HTTPS)
+  # tls:
+  # - hosts:
+  #   - metai.yourdomain.com
+  #   - api.metai.yourdomain.com
+  #   secretName: metai-tls-secret
+  rules:
+  # Frontend
+  - host: metai.yourdomain.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 3000
+  # API
+  - host: api.metai.yourdomain.com  # Replace with your API domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 8084
+  # Alternative: Single domain with path-based routing
+  # - host: metai.yourdomain.com
+  #   http:
+  #     paths:
+  #     - path: /api
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: api-service
+  #           port:
+  #             number: 8084
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: web-service
+  #           port:
+  #             number: 3000
