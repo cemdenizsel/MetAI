@@ -98,6 +98,57 @@ Stage 4: Results & Export
 - Temporal emotion heatmaps
 - Model comparison views
 
+## Observability & Monitoring
+
+### Opik Integration (LLM Observability)
+
+MetAI integrates with [Opik](https://www.comet.com/opik) for comprehensive system observability and tracing. All operations are tracked under a single **MetAI** project for easy monitoring and debugging.
+
+**Dashboard Structure:**
+
+```
+📁 MetAI Project
+│
+├── 🎬 emotion_analysis_pipeline
+│   ├── Purpose: Tracks full video emotion analysis (upload → results)
+│   ├── Tags: video-analysis, full-pipeline
+│   ├── Captures: Processing time, emotion predictions, confidence scores
+│   └── Typical Duration: 30-60s per video
+│
+├── 📹 realtime_chunk_processing
+│   ├── Purpose: Tracks real-time webcam emotion detection
+│   ├── Tags: realtime, chunk
+│   ├── Captures: 4-second chunk latency, FER vs multimodal fusion usage
+│   └── Typical Duration: 2-4s per chunk
+│
+├── 📄 pageindex_document_indexing
+│   ├── Purpose: Tracks document uploads to PageIndex RAG
+│   ├── Tags: indexing, pageindex
+│   ├── Captures: Document name, file size, indexing time
+│   └── Typical Duration: 5-15s per document
+│
+├── 💬 pageindex_chat
+│   ├── Purpose: Tracks Q&A with uploaded documents
+│   ├── Tags: chat, llm, pageindex
+│   ├── Captures: User query, AI answer, citations, retrieval quality
+│   └── Typical Duration: 1-3s per query
+│
+└── 😊 fer_temporal_analysis
+    ├── Purpose: Tracks facial emotion recognition across video frames
+    ├── Tags: fer, temporal, frames
+    ├── Captures: Number of frames analyzed, emotion distribution, mental health score
+    └── Typical Duration: 20-30s for 9 frames
+```
+
+**Key Benefits:**
+- 📊 **Performance Monitoring**: Identify bottlenecks in real-time
+- 🐛 **Debugging**: Trace errors back to exact inputs/outputs
+- 📈 **Quality Tracking**: Monitor emotion prediction accuracy over time
+- 🔍 **Search & Filter**: Find specific sessions by tags, emotions, or confidence scores
+- 🎯 **User Analytics**: Track usage patterns and system health
+
+**Dashboard Access:** https://www.comet.com/opik
+
 ## Installation
 
 ### Prerequisites

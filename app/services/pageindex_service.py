@@ -18,6 +18,18 @@ from config.pageindex_config import get_pageindex_config
 
 logger = logging.getLogger(__name__)
 
+# Opik integration for tracing
+try:
+    from opik import track
+    OPIK_AVAILABLE = True
+except ImportError:
+    # Fallback: no-op decorator if Opik not installed
+    def track(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator if not args else decorator(args[0])
+    OPIK_AVAILABLE = False
+
 
 def _clean_chat_answer(text: str) -> str:
     """
@@ -278,6 +290,7 @@ class PageIndexService:
             self._client = PageIndexClient(api_key=self.config.api_key)
         return self._client
 
+    @track(name="pageindex_document_indexing", tags=["indexing", "pageindex"])
     async def index_document(
         self,
         document_path: str,
@@ -474,6 +487,7 @@ class PageIndexService:
             "documents": documents,
         }
 
+    @track(name="pageindex_chat", tags=["chat", "llm", "pageindex"])
     async def ask_chat(self, user_id: str, message: str) -> Optional[Dict[str, Any]]:
         """
         Q&A over all user documents using PageIndex Chat API.

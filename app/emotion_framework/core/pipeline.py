@@ -13,6 +13,18 @@ import traceback
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
+# Opik integration for tracing
+try:
+    from opik import track
+    OPIK_AVAILABLE = True
+except ImportError:
+    # Fallback: no-op decorator if Opik not installed
+    def track(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator if not args else decorator(args[0])
+    OPIK_AVAILABLE = False
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
@@ -46,27 +58,31 @@ class EmotionAnalysisPipeline:
     def __init__(self, config: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None):
         """
         Initialize the emotion analysis pipeline.
-        
+
         Args:
             config: Configuration dictionary. If None, loads from config_path or defaults.
             config_path: Path to configuration YAML file.
         """
         if config is None:
             config = load_framework_config(config_path)
-        
+
         self.config = config
-        self.emotion_labels = config.get('emotions', {}).get('labels', 
+        self.emotion_labels = config.get('emotions', {}).get('labels',
                                                               ['neutral', 'happy', 'sad', 'angry', 'fear', 'disgust', 'surprise'])
-        
+
         # Initialize processors (lazy loading)
         self._video_processor = None
         self._feature_extractor = None
         self._fusion_engine = None
         self._fer_analyzer = None
         self._ai_agent = None
-        
-        logger.info("EmotionAnalysisPipeline initialized")
+
+        if OPIK_AVAILABLE:
+            logger.info("EmotionAnalysisPipeline initialized with Opik tracing enabled")
+        else:
+            logger.info("EmotionAnalysisPipeline initialized (Opik tracing disabled)")
     
+    @track(name="emotion_analysis_pipeline", tags=["video-analysis", "full-pipeline"])
     def analyze_video(
         self,
         video_path: str,
@@ -144,48 +160,48 @@ class EmotionAnalysisPipeline:
     def _process_stage1_input(self, video_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Stage 1: Process video input - extract audio, frames, and transcription.
-        
+
         Args:
             video_path: Path to video file
             config: Configuration dictionary
-        
+
         Returns:
             Dictionary with extracted data_model
         """
         from emotion_framework.processors import VideoProcessorWrapper
-        
+
         processor = VideoProcessorWrapper(video_path, config)
         return processor.process(config)
     
     def _process_stage2_features(self, stage1_result: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Stage 2: Extract features from audio, visual, and text modalities.
-        
+
         Args:
             stage1_result: Results from stage 1
             config: Configuration dictionary
-        
+
         Returns:
             Dictionary with extracted features
         """
         from emotion_framework.processors import FeatureExtractorOrchestrator
-        
+
         extractor = FeatureExtractorOrchestrator(config)
         return extractor.extract_features(stage1_result)
     
     def _process_stage3_fusion(self, stage2_result: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Stage 3: Fuse modalities and predict emotions.
-        
+
         Args:
             stage2_result: Results from stage 2
             config: Configuration dictionary
-        
+
         Returns:
             Dictionary with emotion predictions
         """
         from emotion_framework.processors import FusionEngine
-        
+
         fusion_engine = FusionEngine(config, self.emotion_labels)
         return fusion_engine.predict(stage2_result)
     
@@ -199,14 +215,14 @@ class EmotionAnalysisPipeline:
     ) -> Dict[str, Any]:
         """
         Stage 4: Advanced analysis - FER and AI agent.
-        
+
         Args:
             stage1_result: Results from stage 1
             stage2_result: Results from stage 2
             stage3_result: Results from stage 3
             config: Configuration dictionary
             options: Processing options
-        
+
         Returns:
             Dictionary with advanced analysis results
         """

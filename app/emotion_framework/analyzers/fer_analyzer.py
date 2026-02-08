@@ -17,6 +17,18 @@ import logging
 from PIL import Image
 import torchvision.transforms as transforms
 
+# Opik integration for tracing
+try:
+    from opik import track
+    OPIK_AVAILABLE = True
+except ImportError:
+    # Fallback: no-op decorator if Opik not installed
+    def track(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator if not args else decorator(args[0])
+    OPIK_AVAILABLE = False
+
 
 class SwinTransformerFER(nn.Module):
     """
@@ -417,14 +429,15 @@ class FERAnalyzer:
                 'all_confidences': {label: 0.0 for label in self.emotion_labels}
             }
     
+    @track(name="fer_temporal_analysis", tags=["fer", "temporal", "frames"])
     def analyze_frame_sequence(self, frame_paths: List[str], timestamps: List[float] = None) -> List[Dict]:
         """
         Analyze a sequence of frames and generate temporal emotion predictions.
-        
+
         Args:
             frame_paths: List of paths to frame images
             timestamps: List of timestamps (optional)
-            
+
         Returns:
             List of temporal emotion predictions
         """

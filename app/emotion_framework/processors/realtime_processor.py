@@ -18,6 +18,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 logger = logging.getLogger(__name__)
 
+# Opik integration for tracing
+try:
+    from opik import track
+    OPIK_AVAILABLE = True
+except ImportError:
+    # Fallback: no-op decorator if Opik not installed
+    def track(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator if not args else decorator(args[0])
+    OPIK_AVAILABLE = False
+
 
 class RealtimeVideoProcessor:
     """
@@ -43,6 +55,7 @@ class RealtimeVideoProcessor:
         
         logger.info("RealtimeVideoProcessor initialized")
     
+    @track(name="realtime_chunk_processing", tags=["realtime", "chunk"])
     def process_chunk(self, chunk_path: str, timestamp: float) -> Dict[str, Any]:
         """
         Process a video chunk with lightweight pipeline.
