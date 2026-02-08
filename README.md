@@ -133,6 +133,17 @@ streamlit run app.py
 
 ## Running from source
 
+### One-time setup (dependencies, NLTK, EmotiVoice)
+
+From the repo root or from `app/`, run once:
+
+```bash
+cd app
+./setup_all.sh
+```
+
+Then start the API (see Backend below). Optionally install ffmpeg for video/audio: `brew install ffmpeg` (macOS) or `sudo apt-get install ffmpeg` (Linux).
+
 ### Backend (API)
 
 From the repository root, activate the virtual environment and start the FastAPI server from the `app/` directory:

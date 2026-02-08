@@ -57,32 +57,18 @@ class ConnectionManager:
     
     async def disconnect(self, session_id: str):
         """
-        Remove a WebSocket connection.
-        
-        Args:
-            session_id: Session ID to disconnect
+        Remove a WebSocket connection. Does not send a message (client may already be gone).
         """
-        if session_id in self.active_connections:
+        if session_id not in self.active_connections:
+            return
+        websocket = self.active_connections.pop(session_id, None)
+        user_id = self.session_users.pop(session_id, None)
+        if websocket:
             try:
-                await self.send_message(session_id, {
-                    "type": "disconnected",
-                    "session_id": session_id,
-                    "message": "WebSocket connection closed",
-                    "timestamp": datetime.now().isoformat()
-                })
-            except Exception:
-                pass
-            
-            websocket = self.active_connections.pop(session_id, None)
-            user_id = self.session_users.pop(session_id, None)
-            
-            if websocket:
-                try:
-                    await websocket.close()
-                except Exception as e:
-                    logger.warning(f"Error closing WebSocket: {e}")
-            
-            logger.info(f"WebSocket disconnected: session={session_id}, user={user_id}")
+                await websocket.close()
+            except Exception as e:
+                logger.debug("WebSocket close: %s", e)
+        logger.debug("WebSocket disconnected: session=%s, user=%s", session_id, user_id)
     
     async def send_message(self, session_id: str, message: Dict[str, Any]):
         """
@@ -108,9 +94,9 @@ class ConnectionManager:
             logger.warning(f"WebSocket disconnected while sending: session={session_id}")
             await self.disconnect(session_id)
         except Exception as e:
-            err_str = str(e)
-            if "close message has been sent" in err_str or "close message has been sent" in err_str.lower():
-                # Client already closed; remove session without trying to send again
+            err_str = str(e).lower()
+            # Send after close: various ASGI/Starlette messages
+            if ("close" in err_str and "send" in err_str) or "close message has been sent" in err_str or "unexpected asgi message" in err_str:
                 self.active_connections.pop(session_id, None)
                 self.session_users.pop(session_id, None)
                 logger.debug("Removed session %s after send on closed connection", session_id)
@@ -138,8 +124,8 @@ class ConnectionManager:
             logger.warning(f"WebSocket disconnected while sending text: session={session_id}")
             await self.disconnect(session_id)
         except Exception as e:
-            err_str = str(e)
-            if "close message has been sent" in err_str or "close message has been sent" in err_str.lower():
+            err_str = str(e).lower()
+            if ("close" in err_str and "send" in err_str) or "close message has been sent" in err_str or "unexpected asgi message" in err_str:
                 self.active_connections.pop(session_id, None)
                 self.session_users.pop(session_id, None)
                 logger.debug("Removed session %s after send on closed connection", session_id)

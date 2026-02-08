@@ -3,16 +3,28 @@ Streamlit TTS Demo
 
 Shows how to use EmotiVoice TTS in Streamlit applications.
 This can be integrated into your existing Streamlit tabs.
+
+Run from app directory: streamlit run tts/streamlit_demo.py
+Or from app/tts: streamlit run streamlit_demo.py (path is set below)
 """
 
-import streamlit as st
-import logging
+import sys
+from pathlib import Path
+
+# Ensure app directory is on path so "tts" package is importable when run from app/tts/
+_app_dir = Path(__file__).resolve().parent.parent
+if str(_app_dir) not in sys.path:
+    sys.path.insert(0, str(_app_dir))
+
+import streamlit as st  # noqa: E402
+import logging  # noqa: E402
 
 try:
     from tts import get_tts_engine, text_to_speech
     TTS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     TTS_AVAILABLE = False
+    logging.warning("TTS import failed: %s", e)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,8 +39,9 @@ def render_tts_demo():
     if not TTS_AVAILABLE:
         st.error("""
         TTS engine not available. To enable TTS:
-        1. Run: `python tts/setup_emotivoice.py`
-        2. Restart the Streamlit app
+        1. Install app dependencies: `pip install -r requirements.txt` (from the app directory)
+        2. Run: `python tts/setup_emotivoice.py` to set up EmotiVoice
+        3. Restart the Streamlit app
         """)
         return
     

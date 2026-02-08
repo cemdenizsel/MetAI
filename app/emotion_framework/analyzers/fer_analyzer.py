@@ -166,37 +166,50 @@ class FERAnalyzer:
     def __init__(self, model_type: str = 'swin_transformer', device: str = None):
         """
         Initialize FER Analyzer.
-        
+
         Args:
-            model_type: Type of model ('swin_transformer', 'custom_cnn')
+            model_type: Type of model ('swin_transformer', 'custom_cnn', 'pretrained')
             device: Computing device ('cuda' or 'cpu')
         """
         self.logger = logging.getLogger(__name__)
-        
+
         # Set device
         if device is None:
-            self.device = torch.device('cuda' if torch.is_available() else 'cpu')
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = torch.device(device)
-        
+
         # FER2013 emotion labels
         self.emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
-        
+
         # Initialize model with proper device handling (production-level)
         self.model_type = model_type
-        
-        # Create model on CPU first
-        if model_type == 'swin_transformer':
-            self.model = SwinTransformerFER(num_classes=len(self.emotion_labels))
-        elif model_type == 'custom_cnn':
-            self.model = CustomCNNFER(num_classes=len(self.emotion_labels))
+
+        # Use pre-trained FER library model (recommended)
+        if model_type == 'pretrained':
+            try:
+                from fer.fer import FER as FERLib
+                self.fer_detector = FERLib(mtcnn=True)  # Use MTCNN for better face detection
+                self.model = None  # No torch model needed
+                self.logger.info("✓ Using pre-trained FER model from fer library")
+            except ImportError as e:
+                self.logger.error(f"fer library import failed: {e}. Install with: pip install fer")
+                raise
+        # Legacy untrained models (not recommended)
         else:
-            raise ValueError(f"Unknown model type: {model_type}")
-        
-        # Production-level fix: Handle meta tensors properly
-        self._materialize_and_initialize_model()
-        
-        self.model.eval()
+            # Create model on CPU first
+            if model_type == 'swin_transformer':
+                self.model = SwinTransformerFER(num_classes=len(self.emotion_labels))
+            elif model_type == 'custom_cnn':
+                self.model = CustomCNNFER(num_classes=len(self.emotion_labels))
+            else:
+                raise ValueError(f"Unknown model type: {model_type}")
+
+            # Production-level fix: Handle meta tensors properly
+            self._materialize_and_initialize_model()
+
+            self.model.eval()
+            self.fer_detector = None
         
         # Image preprocessing
         self.transform = transforms.Compose([
@@ -332,39 +345,72 @@ class FERAnalyzer:
     def predict_emotion(self, image: np.ndarray) -> Dict:
         """
         Predict emotion from a single image.
-        
+
         Args:
-            image: Input image (numpy array)
-            
+            image: Input image (numpy array, RGB format)
+
         Returns:
             Dictionary with emotion predictions
         """
         try:
-            # Preprocess
-            tensor = self.preprocess_image(image).unsqueeze(0).to(self.device)
-            
-            # Predict
-            with torch.no_grad():
-                logits = self.model(tensor)
-                probs = F.softmax(logits, dim=1)
-            
-            # Get prediction
-            probs_np = probs.cpu().numpy()[0]
-            pred_idx = np.argmax(probs_np)
-            
-            result = {
-                'emotion': self.emotion_labels[pred_idx],
-                'confidence': float(probs_np[pred_idx]),
-                'all_confidences': {
-                    label: float(prob) 
-                    for label, prob in zip(self.emotion_labels, probs_np)
+            # Use pre-trained FER library (recommended)
+            if self.model_type == 'pretrained' and self.fer_detector is not None:
+                # Detect emotions using pre-trained model
+                results = self.fer_detector.detect_emotions(image)
+
+                if not results or len(results) == 0:
+                    # No face detected
+                    return {
+                        'emotion': 'neutral',
+                        'confidence': 0.0,
+                        'all_confidences': {label: 0.0 for label in self.emotion_labels}
+                    }
+
+                # Get first face (largest)
+                face_result = results[0]
+                emotions = face_result['emotions']
+
+                # Find dominant emotion
+                dominant_emotion = max(emotions.items(), key=lambda x: x[1])
+
+                result = {
+                    'emotion': dominant_emotion[0],
+                    'confidence': float(dominant_emotion[1]),
+                    'all_confidences': {
+                        label: float(emotions.get(label, 0.0))
+                        for label in self.emotion_labels
+                    }
                 }
-            }
-            
-            return result
-        
+
+                return result
+
+            # Use legacy untrained models (not recommended)
+            else:
+                # Preprocess
+                tensor = self.preprocess_image(image).unsqueeze(0).to(self.device)
+
+                # Predict
+                with torch.no_grad():
+                    logits = self.model(tensor)
+                    probs = F.softmax(logits, dim=1)
+
+                # Get prediction
+                probs_np = probs.cpu().numpy()[0]
+                pred_idx = np.argmax(probs_np)
+
+                result = {
+                    'emotion': self.emotion_labels[pred_idx],
+                    'confidence': float(probs_np[pred_idx]),
+                    'all_confidences': {
+                        label: float(prob)
+                        for label, prob in zip(self.emotion_labels, probs_np)
+                    }
+                }
+
+                return result
+
         except Exception as e:
-            self.logger.error(f"Error predicting emotion: {e}")
+            self.logger.error(f"Error predicting emotion: {e}", exc_info=True)
             return {
                 'emotion': 'neutral',
                 'confidence': 0.0,

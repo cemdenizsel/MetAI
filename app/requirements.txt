@@ -39,11 +39,16 @@ pytest-asyncio>=0.21.0  # Async test support
 httpx>=0.24.0  # HTTP client for testing (used by TestClient)
 
 # Core Framework
-torch>=2.2.0
-torchvision>=0.17.0
+torch>=2.2.0,<2.3.0  # fer requires torch 2.2.x
+torchvision>=0.17.0,<0.18.0  # fer requires torchvision 0.17.x
 numpy>=1.26.0  # Use numpy 1.x or 2.x (depends on opencv version)
 scipy>=1.11.0
 scikit-learn>=1.3.0
+
+# FER - Pre-trained Facial Expression Recognition
+fer>=25.10.3  # Includes pre-trained FER2013 model
+tensorflow>=2.20.0  # Required by fer for inference
+facenet-pytorch>=2.6.0  # Face detection (MTCNN)
 
 # RFRBoost Dependencies
 pytorch-minimize>=0.0.2

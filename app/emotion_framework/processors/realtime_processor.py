@@ -46,61 +46,133 @@ class RealtimeVideoProcessor:
     def process_chunk(self, chunk_path: str, timestamp: float) -> Dict[str, Any]:
         """
         Process a video chunk with lightweight pipeline.
-        
+
+        Strategy:
+        1. Try FER (Facial Expression Recognition) first - most accurate for faces
+        2. Fall back to multimodal fusion (audio + visual features)
+        3. Use default neutral if all methods fail
+
         Args:
             chunk_path: Path to video chunk file
             timestamp: Timestamp of chunk
-            
+
         Returns:
             Emotion prediction dictionary
         """
         try:
             frames = self._extract_frames_fast(chunk_path)
-            
+
             if not frames or len(frames) == 0:
                 logger.warning("No frames extracted from chunk")
                 return self._get_default_prediction()
-            
+
+            # Strategy 1: Try FER first if faces are detected (most accurate)
+            fer_prediction = self._predict_emotion_from_visual(frames)
+            if fer_prediction is not None and fer_prediction.get('confidence', 0) > 0.3:
+                logger.info(f"✓ Using FER prediction: {fer_prediction['emotion']} (confidence: {fer_prediction['confidence']:.2f})")
+                return fer_prediction
+
+            # Strategy 2: Fall back to multimodal fusion (audio + visual features)
             features = self._extract_features_fast(frames, chunk_path)
-            audio_features = features.get('audio') or []
-            # When there is no audio (e.g. webcam), use FER on frames so emotion varies by expression
-            if len(audio_features) == 0 and len(frames) > 0:
-                prediction = self._predict_emotion_from_visual(frames)
-                if prediction is not None:
-                    return prediction
-            prediction = self._predict_emotion_fast(features)
-            
-            return prediction
-            
+
+            # Check if we have any meaningful features
+            has_audio = len(features.get('audio', [])) > 0
+            has_visual = len(features.get('visual', [])) > 0
+
+            if has_audio or has_visual:
+                logger.info(f"→ Using multimodal fusion (audio={has_audio}, visual={has_visual})")
+                prediction = self._predict_emotion_fast(features)
+                logger.info(f"→ Multimodal result: {prediction.get('emotion')} (confidence: {prediction.get('confidence', 0):.2f})")
+                return prediction
+
+            # Strategy 3: Last resort - default prediction
+            logger.warning("No features extracted, using default prediction")
+            return self._get_default_prediction()
+
         except Exception as e:
             logger.error(f"Error processing chunk: {e}", exc_info=True)
             return self._get_default_prediction()
     
     def _predict_emotion_from_visual(self, frames: List[np.ndarray]) -> Optional[Dict[str, Any]]:
         """
-        Predict emotion from frames using FER when audio is empty (e.g. webcam).
-        Returns None if FER is unavailable or fails.
+        Predict emotion from frames using FER (Facial Expression Recognition).
+
+        Uses the middle frame for stability and averages predictions from
+        multiple frames if needed for better accuracy.
+
+        Returns:
+            Emotion prediction dict, or None if FER unavailable/fails
         """
         try:
             if self._fer_analyzer is None:
                 from emotion_framework.analyzers.fer_analyzer import FERAnalyzer
-                self._fer_analyzer = FERAnalyzer(model_type='custom_cnn')
-            # Use middle frame for stability
-            frame = frames[len(frames) // 2]
-            if frame is None or frame.size == 0:
+                logger.info("Initializing pre-trained FER analyzer for realtime processing")
+                self._fer_analyzer = FERAnalyzer(model_type='pretrained')
+
+            if not frames or len(frames) == 0:
                 return None
-            # FER expects RGB; OpenCV frames are BGR
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = self._fer_analyzer.predict_emotion(frame_rgb)
-            if not result or result.get('confidence', 0) == 0:
+
+            # Try multiple frames for robustness, weight middle frame more
+            predictions = []
+            frame_indices = [0, len(frames) // 2, -1] if len(frames) >= 3 else [len(frames) // 2]
+
+            for idx in frame_indices:
+                frame = frames[idx]
+                if frame is None or frame.size == 0:
+                    continue
+
+                # FER expects RGB; OpenCV frames are BGR
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                result = self._fer_analyzer.predict_emotion(frame_rgb)
+
+                if result and result.get('confidence', 0) > 0:
+                    predictions.append(result)
+
+            if not predictions:
+                logger.debug("FER: No faces detected in frames")
                 return None
+
+            # Average predictions if we have multiple
+            if len(predictions) == 1:
+                result = predictions[0]
+            else:
+                # Weighted average (middle frame gets 50%, others split remaining)
+                weights = [0.25, 0.5, 0.25] if len(predictions) == 3 else [0.5, 0.5]
+                weights = weights[:len(predictions)]
+
+                # Average confidences across all emotion labels
+                all_labels = set()
+                for pred in predictions:
+                    all_labels.update(pred.get('all_confidences', pred.get('confidences', {})).keys())
+
+                avg_confidences = {}
+                for label in all_labels:
+                    weighted_sum = sum(
+                        pred.get('all_confidences', pred.get('confidences', {})).get(label, 0) * weight
+                        for pred, weight in zip(predictions, weights)
+                    )
+                    avg_confidences[label] = weighted_sum
+
+                # Get dominant emotion
+                top_emotion = max(avg_confidences.items(), key=lambda x: x[1])
+
+                result = {
+                    'emotion': top_emotion[0],
+                    'confidence': top_emotion[1],
+                    'all_confidences': avg_confidences,
+                }
+
+            # Log successful FER detection
+            logger.info(f"✓ FER detected face: {result['emotion']} (confidence: {result['confidence']:.2f})")
+
             return {
                 'emotion': result.get('emotion', 'neutral'),
                 'confidence': result.get('confidence', 0.0),
                 'confidences': result.get('all_confidences', result.get('confidences', {})),
             }
+
         except Exception as e:
-            logger.debug("FER visual prediction skipped: %s", e)
+            logger.info(f"✗ FER failed (no face detected or error): {e}")
             return None
     
     def _extract_frames_fast(self, video_path: str) -> List[np.ndarray]:
@@ -123,8 +195,7 @@ class RealtimeVideoProcessor:
                 return frames
             
             fps = cap.get(cv2.CAP_PROP_FPS)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            
+
             if fps <= 0:
                 fps = 30
             
@@ -291,7 +362,9 @@ class RealtimeFeatureExtractor:
             import librosa
             
             audio, sr = librosa.load(video_path, sr=16000, mono=True, duration=4.0)
-            
+
+            logger.info(f"  Audio extracted: {len(audio)} samples, sample_rate={sr}, duration={len(audio)/sr:.2f}s")
+
             mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=13)
             mfcc_mean = np.mean(mfccs, axis=1)
             
@@ -318,65 +391,256 @@ class RealtimeFeatureExtractor:
 class IncrementalFusionEngine:
     """
     Quick emotion prediction engine for real-time analysis.
-    
-    Uses lightweight ai_models and simplified fusion for speed.
+
+    Uses lightweight models and simplified fusion for speed.
+    Now includes proper multimodal fusion using both audio and visual features.
     """
-    
+
     def __init__(self, config: Dict[str, Any], emotion_labels: List[str]):
         """Initialize fusion engine."""
         self.config = config
         self.emotion_labels = emotion_labels
         self._model = None
-    
+        self._fer_analyzer = None
+
     def predict_fast(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Fast emotion prediction from features.
-        
+        Fast emotion prediction from features using multimodal fusion.
+
         Args:
-            features: Feature dictionary
-            
+            features: Feature dictionary with 'visual' and 'audio' keys
+
         Returns:
             Emotion prediction dictionary
         """
         try:
             visual_features = features.get('visual', np.array([]))
             audio_features = features.get('audio', np.array([]))
-            
-            if len(audio_features) > 0:
-                audio_energy = np.mean(np.abs(audio_features))
-                
-                if audio_energy > 0.5:
-                    emotion = 'happy'
-                    confidence = min(0.7 + audio_energy * 0.2, 0.95)
-                elif audio_energy > 0.3:
-                    emotion = 'neutral'
-                    confidence = 0.6
-                else:
-                    emotion = 'sad'
-                    confidence = min(0.6 + (0.5 - audio_energy), 0.85)
+
+            has_visual = len(visual_features) > 0
+            has_audio = len(audio_features) > 0
+
+            # Strategy: Use audio + visual features for robust prediction
+            emotion_scores = {label: 0.0 for label in self.emotion_labels}
+
+            # Audio-based emotion scoring (if available)
+            if has_audio:
+                audio_scores = self._score_from_audio(audio_features)
+                for label, score in audio_scores.items():
+                    emotion_scores[label] += score * 0.6  # 60% weight to audio
+
+            # Visual-based emotion scoring (if available)
+            if has_visual:
+                visual_scores = self._score_from_visual(visual_features)
+                for label, score in visual_scores.items():
+                    emotion_scores[label] += score * 0.4  # 40% weight to visual
+
+            # If neither modality available, return neutral
+            if not has_audio and not has_visual:
+                return self._get_neutral_prediction()
+
+            # Normalize scores to probabilities
+            total_score = sum(emotion_scores.values())
+            if total_score > 0:
+                confidences = {k: v / total_score for k, v in emotion_scores.items()}
             else:
-                emotion = 'neutral'
-                confidence = 0.5
-            
-            confidences = {label: 0.1 for label in self.emotion_labels}
-            confidences[emotion] = confidence
-            
-            total = sum(confidences.values())
-            confidences = {k: v / total for k, v in confidences.items()}
-            
+                confidences = {label: 1.0 / len(self.emotion_labels) for label in self.emotion_labels}
+
+            # Get top emotion
+            emotion = max(confidences.items(), key=lambda x: x[1])[0]
+            confidence = confidences[emotion]
+
+            # Log top 3 final combined scores
+            top_combined = sorted(confidences.items(), key=lambda x: x[1], reverse=True)[:3]
+            logger.info(f"  Final combined: {', '.join([f'{k}={v:.2f}' for k, v in top_combined])}")
+
             return {
                 'emotion': emotion,
-                'confidence': confidences[emotion],
+                'confidence': confidence,
                 'confidences': confidences,
             }
-            
+
         except Exception as e:
-            logger.error(f"Error predicting emotion: {e}")
-            
-            confidences = {label: 1.0 / len(self.emotion_labels) for label in self.emotion_labels}
-            return {
-                'emotion': 'neutral',
-                'confidence': confidences.get('neutral', 0.14),
-                'confidences': confidences,
-            }
+            logger.error(f"Error predicting emotion: {e}", exc_info=True)
+            return self._get_neutral_prediction()
+
+    def _score_from_audio(self, audio_features: np.ndarray) -> Dict[str, float]:
+        """
+        Score emotions from audio features (MFCCs + spectral).
+
+        Args:
+            audio_features: Audio feature vector [mfcc_13, spectral_centroid, zcr]
+
+        Returns:
+            Dictionary of emotion scores
+        """
+        scores = {label: 0.1 for label in self.emotion_labels}  # Base score
+
+        try:
+            # Extract components
+            mfcc_features = audio_features[:13] if len(audio_features) >= 13 else audio_features
+            spectral_centroid = audio_features[13] if len(audio_features) > 13 else 0.0
+            zcr = audio_features[14] if len(audio_features) > 14 else 0.0
+
+            # MFCC-based features
+            mfcc_energy = np.sqrt(np.mean(mfcc_features ** 2))  # RMS energy
+            mfcc_variance = np.var(mfcc_features)
+
+            logger.info(f"  Audio features: energy={mfcc_energy:.2f}, variance={mfcc_variance:.2f}, spectral={spectral_centroid:.2f}, zcr={zcr:.4f}")
+
+            # Emotion heuristics based on audio characteristics:
+            # High energy + high variance = excited emotions (happy, angry, surprise)
+            # Low energy + low variance = calm emotions (sad, neutral)
+            # High ZCR = fear, surprise
+
+            # Recalibrated thresholds based on actual MFCC scales:
+            # Energy typically ranges: 150-250
+            # Variance typically ranges: 25,000-45,000
+            # Spectral centroid: 700-2000 Hz
+            # ZCR: 0.03-0.15
+
+            # Happy: High energy, moderate-high variance
+            if mfcc_energy > 195 and mfcc_variance > 35000:
+                scores['happy'] += 0.5
+
+            # Sad: Low energy, low variance
+            if mfcc_energy < 180 and mfcc_variance < 32000:
+                scores['sad'] += 0.5
+
+            # Angry: Very high energy, very high variance, high spectral
+            if mfcc_energy > 205 and mfcc_variance > 40000:
+                scores['angry'] += 0.4
+
+            # Fear: High ZCR (trembling voice), moderate energy
+            if zcr > 0.10:
+                scores['fear'] += 0.4
+                scores['surprise'] += 0.3
+
+            # Surprise: High energy spike, high variance
+            if mfcc_energy > 200 and mfcc_variance > 38000:
+                scores['surprise'] += 0.3
+
+            # Neutral: Moderate energy, moderate variance
+            if 180 <= mfcc_energy <= 195 and 32000 <= mfcc_variance <= 38000:
+                scores['neutral'] += 0.6
+
+            # Disgust: Higher spectral patterns
+            if spectral_centroid > 1400:
+                scores['disgust'] += 0.2
+
+        except Exception as e:
+            logger.warning(f"Error scoring audio features: {e}")
+            # Return uniform scores on error
+            scores = {label: 1.0 / len(self.emotion_labels) for label in self.emotion_labels}
+
+        # Log top 3 audio scores
+        top_audio = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:3]
+        logger.info(f"  Top audio scores: {', '.join([f'{k}={v:.2f}' for k, v in top_audio])}")
+
+        return scores
+
+    def _score_from_visual(self, visual_features: np.ndarray) -> Dict[str, float]:
+        """
+        Score emotions from visual features (color histograms).
+
+        Args:
+            visual_features: Visual feature vector (RGB histograms)
+
+        Returns:
+            Dictionary of emotion scores
+        """
+        scores = {label: 0.1 for label in self.emotion_labels}  # Base score
+
+        try:
+            # Split RGB histograms (32 bins each = 96 total features)
+            if len(visual_features) >= 96:
+                hist_b = visual_features[:32]
+                hist_g = visual_features[32:64]
+                hist_r = visual_features[64:96]
+
+                # Normalize histogram values to 0-1 range
+                # Histograms are in range 0-N (where N is number of pixels per bin)
+                # We need to normalize them to get meaningful brightness/contrast values
+                max_hist_val = np.max(visual_features) + 1e-6
+                norm_hist_b = hist_b / max_hist_val
+                norm_hist_g = hist_g / max_hist_val
+                norm_hist_r = hist_r / max_hist_val
+
+                # Calculate color statistics (now in 0-1 range)
+                brightness = np.mean([np.mean(norm_hist_b), np.mean(norm_hist_g), np.mean(norm_hist_r)])
+                contrast = np.std([np.std(norm_hist_b), np.std(norm_hist_g), np.std(norm_hist_r)])
+
+                # Red dominance (may indicate anger, excitement)
+                # Compare red channel mean to overall mean
+                overall_mean = np.mean(visual_features)
+                red_mean = np.mean(hist_r)
+                green_mean = np.mean(hist_g)
+                blue_mean = np.mean(hist_b)
+
+                red_ratio = red_mean / (overall_mean + 1e-6)
+                green_ratio = green_mean / (overall_mean + 1e-6)
+                blue_ratio = blue_mean / (overall_mean + 1e-6)
+
+                logger.info(f"  Visual features: brightness={brightness:.2f}, contrast={contrast:.2f}, red_ratio={red_ratio:.2f}, green_ratio={green_ratio:.2f}, blue_ratio={blue_ratio:.2f}")
+
+                # Blue dominance (may indicate sadness, calmness)
+                blue_ratio = np.mean(hist_b) / (np.mean(visual_features) + 1e-6)
+
+                # Color-based emotion heuristics:
+                # Bright scenes = positive emotions
+                # Dark scenes = negative emotions
+                # High contrast = strong emotions
+
+                # Happy: Bright, warm colors (red dominant)
+                if brightness > 0.15 and red_ratio > 0.34:
+                    scores['happy'] += 0.4
+
+                # Sad: Dark, cool colors (blue dominant)
+                if brightness < 0.12 and blue_ratio > 0.34:
+                    scores['sad'] += 0.4
+
+                # Angry: High contrast, red dominant
+                if contrast > 0.08 and red_ratio > 0.35:
+                    scores['angry'] += 0.3
+
+                # Fear: Low brightness, high contrast
+                if brightness < 0.13 and contrast > 0.09:
+                    scores['fear'] += 0.3
+
+                # Surprise: High brightness, high contrast
+                if brightness > 0.18 and contrast > 0.08:
+                    scores['surprise'] += 0.3
+
+                # Neutral: Moderate brightness and contrast
+                if 0.12 <= brightness <= 0.16 and 0.04 <= contrast <= 0.09:
+                    scores['neutral'] += 0.5
+
+                # Disgust: Greenish tint
+                if green_ratio > 0.34:
+                    scores['disgust'] += 0.2
+
+        except Exception as e:
+            logger.warning(f"Error scoring visual features: {e}")
+            # Return uniform scores on error
+            scores = {label: 1.0 / len(self.emotion_labels) for label in self.emotion_labels}
+
+        # Log top 3 visual scores
+        top_visual = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:3]
+        logger.info(f"  Top visual scores: {', '.join([f'{k}={v:.2f}' for k, v in top_visual])}")
+
+        return scores
+
+    def _get_neutral_prediction(self) -> Dict[str, Any]:
+        """Get neutral prediction when no features available."""
+        confidences = {label: 0.1 for label in self.emotion_labels}
+        confidences['neutral'] = 0.5
+
+        total = sum(confidences.values())
+        confidences = {k: v / total for k, v in confidences.items()}
+
+        return {
+            'emotion': 'neutral',
+            'confidence': confidences['neutral'],
+            'confidences': confidences,
+        }
 

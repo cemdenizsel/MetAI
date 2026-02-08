@@ -119,7 +119,31 @@ export const useAuthStore = create<AuthStore>()(
           return false;
         }
 
-        // Ensure cookie is synced with localStorage
+        // Check if token is expired before making API call
+        try {
+          // Decode JWT to check expiry (without verification)
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const expiry = payload.exp * 1000; // Convert to milliseconds
+
+          if (Date.now() >= expiry) {
+            // Token expired - clean up and return false
+            console.log('Token expired, clearing auth state');
+            removeAuthToken();
+            localStorage.removeItem('user');
+            set({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+            return false;
+          }
+        } catch (err) {
+          // If token decode fails, try API call anyway
+          console.warn('Failed to decode token, will validate with API', err);
+        }
+
+        // Ensure cookie is synced with localStorage (only if not expired)
         setCookie('auth_token', token, { maxAge: 60 * 60 * 24 * 7 });
 
         try {
@@ -138,7 +162,9 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false,
           });
           return true;
-        } catch {
+        } catch (error) {
+          // API call failed (network error or token invalid)
+          console.error('Failed to load user profile, clearing auth', error);
           removeAuthToken();
           localStorage.removeItem('user');
           set({

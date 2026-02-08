@@ -216,8 +216,9 @@ class EmotionAnalysisPipeline:
         if stage1_result.get('frame_paths') and len(stage1_result['frame_paths']) > 0:
             try:
                 from emotion_framework.analyzers import FERAnalyzer
-                
-                fer = FERAnalyzer(model_type='custom_cnn')
+
+                # Use pre-trained FER model for accurate facial emotion detection
+                fer = FERAnalyzer(model_type='pretrained')
                 
                 # Analyze frame sequence
                 temporal_predictions = fer.analyze_frame_sequence(

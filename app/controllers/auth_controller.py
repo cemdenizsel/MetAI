@@ -14,7 +14,7 @@ from utils.auth import create_access_token, get_current_user_email, ACCESS_TOKEN
 from services.user_service import get_user_service, UserService
 from services.redis_service import get_redis_service, RedisService
 from utils.otp_utils import generate_password_reset_otp, validate_password_reset_otp_format
-from utils.email import send_password_reset_email, send_welcome_email
+from utils.email_utils import send_password_reset_email, send_welcome_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

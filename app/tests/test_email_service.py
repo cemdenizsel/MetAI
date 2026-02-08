@@ -1,4 +1,4 @@
-from utils.email import send_welcome_email
+from utils.email_utils import send_welcome_email
 from unittest import TestCase
 
 
