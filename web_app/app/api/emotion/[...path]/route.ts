@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.API_URL || 'http://localhost:8084';
+const API_URL = process.env.NODE_ENV === 'development'
+  ? (process.env.API_URL || 'http://localhost:8084')
+  : (process.env.API_URL || 'https://be.meetingai.info');
 
 async function proxyRequest(
   request: NextRequest,

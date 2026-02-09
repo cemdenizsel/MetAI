@@ -38,8 +38,15 @@ export interface RealtimeAnalysisState {
 type MessageHandler = (data: unknown) => void;
 
 const getWebSocketUrl = (token: string): string => {
-  // Use environment variable or default to localhost
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8084';
+  // Use environment variable or default based on environment
+  let apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!apiUrl) {
+    apiUrl = process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8084'
+      : 'https://be.meetingai.info';
+  }
+
   const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
   const wsHost = apiUrl.replace(/^https?:\/\//, '');
   return `${wsProtocol}://${wsHost}/ws/analyze?token=${encodeURIComponent(token)}`;

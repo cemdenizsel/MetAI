@@ -12,7 +12,9 @@ const nextConfig = {
     ],
   },
   env: {
-    API_URL: process.env.API_URL || 'http://localhost:8084',
+    API_URL: process.env.NODE_ENV === 'development'
+      ? (process.env.API_URL || 'http://localhost:8084')
+      : (process.env.API_URL || 'https://be.meetingai.info'),
   },
 };
 

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Backend API
   api:
@@ -38,8 +36,6 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8084
-    env_file:
-      - ./web_app/.env.local
     depends_on:
       - api
     networks:

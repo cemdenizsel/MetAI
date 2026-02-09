@@ -3,5 +3,4 @@ kind: Namespace
 metadata:
   name: metai
   labels:
-    name: metai
     app: metai

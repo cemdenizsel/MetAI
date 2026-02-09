@@ -5,71 +5,73 @@ metadata:
   namespace: metai
   labels:
     app: web
-    component: frontend
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     metadata:
       labels:
         app: web
     spec:
-      initContainers:
-      - name: wait-for-api
-        image: busybox:1.28
-        command: ['sh', '-c', 'until nc -z api-service 8084; do echo waiting for api; sleep 2; done;']
       containers:
       - name: web
-        image: metai-web:latest  # Replace with your registry/image
-        imagePullPolicy: Always
+        image: your-registry/metai-web:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
           name: http
         env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: metai-config
+              key: NODE_ENV
         - name: NEXT_PUBLIC_API_URL
           valueFrom:
             configMapKeyRef:
               name: metai-config
               key: NEXT_PUBLIC_API_URL
-        - name: NODE_ENV
-          value: "production"
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
+            memory: "256Mi"
+            cpu: "100m"
           limits:
-            memory: "1Gi"
-            cpu: "1000m"
+            memory: "512Mi"
+            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /
             port: 3000
           initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
+          periodSeconds: 30
+          timeoutSeconds: 10
         readinessProbe:
           httpGet:
             path: /
             port: 3000
           initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
+          periodSeconds: 10
+          timeoutSeconds: 5
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: web-service
+  name: web
   namespace: metai
   labels:
     app: web
 spec:
-  type: ClusterIP
+  selector:
+    app: web
   ports:
   - port: 3000
     targetPort: 3000
-    protocol: TCP
     name: http
-  selector:
-    app: web
+  type: ClusterIP
