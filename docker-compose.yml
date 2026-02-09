@@ -58,7 +58,7 @@ services:
       - metai-network
     restart: unless-stopped
 
-  # Redis
+  # Redis for OTP and Caching
   redis:
     image: redis:7-alpine
     container_name: metai-redis

@@ -18,12 +18,12 @@ import * as emotionApi from '@/lib/api/emotion';
 import type { AnalysisJob } from '@/types/emotion';
 
 /** Emotion/confidence for list display (sync result has top-level; full response has results[0].overall_prediction) */
-function getDisplayEmotion(result: AnalysisJob['result']) {
+function getDisplayEmotion(result: AnalysisJob['result']): { predicted_emotion: string; confidence: number } | null {
   if (!result) return null;
-  const r = result as Record<string, unknown>;
+  const r = result as unknown as Record<string, unknown>;
   const emotion = r?.predicted_emotion ?? (r?.results as Array<{ overall_prediction?: { predicted_emotion?: string; confidence?: number } }>)?.[0]?.overall_prediction?.predicted_emotion;
   const confidence = r?.confidence ?? (r?.results as Array<{ overall_prediction?: { confidence?: number } }>)?.[0]?.overall_prediction?.confidence;
-  return emotion != null && confidence != null ? { predicted_emotion: emotion, confidence: Number(confidence) } : null;
+  return emotion != null && confidence != null ? { predicted_emotion: String(emotion), confidence: Number(confidence) } : null;
 }
 
 export default function DashboardPage() {

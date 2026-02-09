@@ -10,7 +10,6 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, R
 from typing import Optional
 
 from services.emotion_service import EmotionAnalysisService
-from services.job_service import get_job_service, JobService
 from models.response_models import MultiModelResponse
 from utils.auth import get_current_user_email
 from utils.opik_helper import flush_opik
@@ -99,7 +98,6 @@ async def analyze_video(
     cache_ttl_days: Optional[int] = Form(30, description="Cache TTL in days (default: 30)"),
     current_user_email: str = Depends(get_current_user_email),
     user_service: UserService = Depends(get_user_service),
-    job_service: JobService = Depends(get_job_service),
 ):
     """
     Analyze a video file for emotions.
@@ -164,14 +162,10 @@ async def analyze_video(
         
         # Save to history so it appears in "Past analyses" (sync analyses are now stored like async jobs)
         try:
-            result_dict = (
-                result.model_dump() if hasattr(result, "model_dump")
-                else (result.dict() if hasattr(result, "dict") else result)
-            )
-            if isinstance(result_dict, dict):
-                await job_service.save_sync_analysis(user_id, video.filename, result_dict)
+            # History tracking removed (was part of job_service)
+            logger.info(f"Analysis completed for video: {video.filename}")
         except Exception as save_err:
-            logger.warning("Could not save sync analysis to history: %s", save_err)
+            logger.warning("Error during post-analysis: %s", save_err)
         
         logger.info(f"Analysis completed successfully for user: {current_user_email}")
         return result

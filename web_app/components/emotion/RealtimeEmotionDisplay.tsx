@@ -259,9 +259,9 @@ export function RealtimeEmotionDisplay({
                     borderRadius: '8px',
                     color: '#fff',
                   }}
-                  formatter={(value: number, name: string, props: { payload: { emotion: string } }) => [
+                  formatter={(value: number, name: string, props: { payload?: { emotion: string } }) => [
                     `${value}%`,
-                    `${EMOTION_LABELS[props.payload.emotion] || props.payload.emotion}`,
+                    `${EMOTION_LABELS[props.payload?.emotion || ''] || props.payload?.emotion || ''}`,
                   ]}
                   labelFormatter={(label) => `Time: ${label}s`}
                 />

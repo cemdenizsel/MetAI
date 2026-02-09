@@ -116,17 +116,13 @@ async def general_exception_handler(request: Request, exc: Exception):
 from controllers.auth_controller import router as auth_router
 from controllers.emotion_controller import router as emotion_router
 from controllers.websocket_controller import router as websocket_router
-from controllers.job_controller import router as job_router
 from controllers.cache_controller import router as cache_router
-from controllers.batch_controller import router as batch_router
 from controllers.meeting_controller import router as meeting_router
 
 app.include_router(auth_router)
 app.include_router(emotion_router)
 app.include_router(websocket_router)
-app.include_router(job_router)
 app.include_router(cache_router)
-app.include_router(batch_router)
 app.include_router(meeting_router)
 
 

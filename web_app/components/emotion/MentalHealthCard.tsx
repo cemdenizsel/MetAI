@@ -117,7 +117,7 @@ export function MentalHealthCard({ assessment }: MentalHealthCardProps) {
           <div
             className={cn(
               'h-full transition-all duration-500',
-              getProgressColor(assessment.score)
+              getProgressColor('mental_health_score' in assessment ? assessment.mental_health_score : assessment.score)
             )}
             style={{
               width: `${('mental_health_score' in assessment ? assessment.mental_health_score : assessment.score)}%`,

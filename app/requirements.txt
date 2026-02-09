@@ -25,13 +25,8 @@ PyJWT>=2.8.0  # JWT token handling
 passlib[bcrypt]>=1.7.4  # Password hashing
 python-jose[cryptography]>=3.3.0  # JWT utilities
 
-# Redis for OTP management and Celery
-redis>=5.0.1  # Redis client (updated for Celery compatibility)
-
-# Celery for async task processing
-celery[redis]>=5.3.4  # Celery with Redis broker/backend
-kombu>=5.3.4  # Messaging library for Celery
-flower>=2.0.1  # Celery monitoring tool (optional)
+# Redis for OTP management and caching
+redis>=5.0.1  # Redis client for OTP and cache
 
 # Testing
 pytest>=7.4.0  # Testing framework
@@ -47,7 +42,7 @@ scikit-learn>=1.3.0
 
 # FER - Pre-trained Facial Expression Recognition
 fer>=25.10.3  # Includes pre-trained FER2013 model
-tensorflow>=2.20.0  # Required by fer for inference
+tensorflow>=2.15.0,<2.16.0  # Required by fer for inference (compatible with streamlit's protobuf<5)
 facenet-pytorch>=2.6.0  # Face detection (MTCNN)
 
 # RFRBoost Dependencies
@@ -76,8 +71,8 @@ pillow>=10.0.0
 scikit-image>=0.21.0
 
 # Text Processing & NLP
-transformers>=4.30.0
-sentence-transformers>=2.2.2
+transformers>=4.30.0,<5.0.0  # Pin to 4.x to avoid 5.x compatibility issues
+sentence-transformers>=2.2.2,<6.0.0
 nltk>=3.8.1
 spacy>=3.6.0
 textblob>=0.17.1
