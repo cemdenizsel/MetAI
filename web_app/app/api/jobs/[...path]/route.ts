@@ -11,7 +11,11 @@ async function proxyRequest(
 ) {
   const endpoint = path.join('/');
   const search = request.nextUrl.searchParams.toString();
-  const url = `${API_URL}/api/v1/jobs/${endpoint}${search ? `?${search}` : ''}`;
+
+  // Route my-jobs to emotion controller since job controller was removed
+  const apiPath = endpoint === 'my-jobs' ? 'emotion' : 'jobs';
+  const url = `${API_URL}/api/v1/${apiPath}/${endpoint}${search ? `?${search}` : ''}`;
+
   const token =
     request.cookies.get('auth_token')?.value ||
     request.headers.get('authorization')?.replace(/^Bearer /i, '').trim() ||

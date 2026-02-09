@@ -14,6 +14,7 @@ from models.response_models import MultiModelResponse
 from utils.auth import get_current_user_email
 from utils.opik_helper import flush_opik
 from services.user_service import get_user_service, UserService
+from data.mongodb_config import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -292,4 +293,74 @@ async def list_models():
         "success": True,
         "ai_models": models
     }
+
+
+@router.get(
+    "/my-jobs",
+    summary="Get My Analysis Jobs",
+    description="Retrieve user's emotion analysis history",
+    response_model=dict
+)
+async def get_my_jobs(
+    limit: int = 10,
+    skip: int = 0,
+    email: str = Depends(get_current_user_email),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get the current user's emotion analysis jobs.
+
+    Args:
+        limit: Maximum number of jobs to return (default: 10)
+        skip: Number of jobs to skip for pagination (default: 0)
+        email: Current user's email (from auth token)
+        user_service: User service dependency
+
+    Returns:
+        List of user's analysis jobs
+    """
+    try:
+        # Get user ID from email
+        user = await user_service.get_user_by_email(email)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user_id = user["_id"]
+
+        # Get database connection
+        db = await get_database()
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+
+        # Query emotion_jobs collection
+        jobs_collection = db.emotion_jobs
+
+        # Find jobs for this user, sorted by created_at descending
+        cursor = jobs_collection.find(
+            {"user_id": user_id}
+        ).sort("created_at", -1).skip(skip).limit(limit)
+
+        jobs = []
+        async for job in cursor:
+            # Convert MongoDB document to response format
+            jobs.append({
+                "job_id": job.get("task_id", str(job["_id"])),
+                "filename": job.get("filename", ""),
+                "status": job.get("status", "PENDING"),
+                "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
+                "completed_at": job.get("completed_at").isoformat() if job.get("completed_at") else None,
+                "result": job.get("result")
+            })
+
+        return {
+            "success": True,
+            "jobs": jobs,
+            "count": len(jobs)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user jobs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch jobs: {str(e)}")
 
