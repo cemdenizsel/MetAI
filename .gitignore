@@ -6,6 +6,8 @@ __pycache__/
 .idea/
 .env*
 *.sh
+# Exception: Keep setup scripts needed for Docker
+!app/setup_all.sh
 .DS_Store
 
 # Python
