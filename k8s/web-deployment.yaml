@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: web
-        image: your-registry/metai-web:latest
+        image: dogukangun/metai-web:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000

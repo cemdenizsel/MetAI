@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: your-registry/metai-api:latest
+        image: dogukangun/metai-api:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8084
