@@ -4,16 +4,14 @@ metadata:
   name: metai-ingress
   namespace: metai
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
-  - hosts:
+  - secretName: metai-tls
+    hosts:
     - meetingai.info
     - be.meetingai.info
-    secretName: metai-tls
   rules:
   # Backend API route
   - host: be.meetingai.info
